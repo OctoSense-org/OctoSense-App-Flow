@@ -135,12 +135,14 @@ says who runs each one and when.
     which also adds `requires: ["wasm-components-v1"]` (`storage` for
     files, and `net` for HTTP; it never adds a host). A component's HTTP
     reaches any host: an app's network declarations are shown at install and
-    not enforced while it runs (OctoSense's ruling of 8 October 2026). No
-    OctoSense build loads components yet, and App Hub `main` refuses them
-    until App Hub #186 merges; HTTP
-    (`octosense_component::http`) and host services
-    (`octosense_component::host`) also need ADR 0014's phase 3 and App Hub
-    #188. Say so, and report calling one from an app as unverified.
+    not enforced while it runs (OctoSense's ruling of 8 October 2026).
+    OctoSense `main` has run components since 10 October 2026 (OctoSense #451),
+    and App Hub `main` admits them (App Hub #186, #188); no release does yet,
+    and desktop 0.1.0-rc.2 and Home 0.1.0-beta.2 refuse the manifest at
+    install. Say so, and report a store install of a published app with
+    components, agent tools calling one, and phones as unverified.
+    `tools/octo wasm call` runs one function of a built component from the
+    command line through an OctoSense checkout.
   - `card-host` answers every call with
     `no service answers "wasm" on this device`. An isolated Wasm fixture is
     not evidence that your app's functions work; test its exact bundle and

@@ -6,42 +6,47 @@ A store app's bundle holds no native code, but it can carry your Rust code
 as WebAssembly in its `fns/` folder. The shell's `wasm` service runs that code
 in a sandbox, and the app's script calls it by name. There are two kinds:
 
-- A **component** ([ADR 0014](https://github.com/OctoSense-org/OctoSense/pull/436),
-  proposed): you write ordinary Rust with this repository's SDK, and
+- A **component** ([ADR 0014](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0014-app-components-in-webassembly.md)):
+  you write ordinary Rust with this repository's SDK, and
   `tools/octo wasm build` turns it into `fns/<name>.wasm`. The script calls
   each `pub fn` as `wasm.<function>` with JSON, so there is no WIT and no glue
   code to write. A component keeps its state between calls, and it has a
   clock and random numbers. With the `storage` capability, it also has the
-  app's own files. ADR 0014's phase 3 adds HTTP to any host, with `net`
-  ([Network](#network)), and calls to the host services the app is granted
+  app's own files; with `net`, HTTP to any host ([Network](#network)); and it
+  can call the host services the app is granted
   ([Host services](#host-services)).
 - A **core module** ([ADR 0011](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0011-apps-own-functions-in-webassembly.md)):
   functions over bytes or JSON, written with a copied guest crate, and with
   nothing but their input. [Core modules](#core-modules-adr-0011) at the end
   of this page covers them.
 
-**No OctoSense build runs components yet.** The SDK and `tools/octo wasm`
-are ready, and their tests run every component in Wasmtime 49 with WASI 0.2,
-the runtime OctoSense uses. Running one in a shell needs ADR 0014's phase 2,
-which is not merged, and App Hub's gate needs
-[App Hub #186](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/186),
-which is in review. A component's HTTP requests and host-service calls are
-phase 3: OctoSense's runtime for them is not merged either, and App Hub's gate
-admits them from
-[App Hub #188](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/188),
-in review on top of #186. So calling a component from an app is
-**unverified**. Today, only core modules run in an app.
+**OctoSense `main` runs components; no release does yet.** The runtime
+([OctoSense #436](https://github.com/OctoSense-org/OctoSense/pull/436)) and the `wasm` service that loads
+components, with HTTP and host services ([OctoSense #451](https://github.com/OctoSense-org/OctoSense/pull/451)),
+merged on 10 October 2026, and App Hub's gate admits them
+([App Hub #186](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/186) and, for `wasi:http` and `octosense:host`,
+[App Hub #188](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/188)). Desktop 0.1.0-rc.2 and Home 0.1.0-beta.2 pin
+an App Hub that predates `wasm-components-v1`, so their stores refuse such an
+app at install. The first desktop or Home release cut from OctoSense `main` at
+or after `04100758` will be the first to run one. Verified here on 10 October
+2026: this page's template component, built with `tools/octo wasm build` and
+admitted by `hub check`, answered `wasm.count`, `wasm.greet` and
+`wasm.parse_number` through the shell's `wasm` service, built from OctoSense
+`main` (`80b27693`) and run in its test harness, which dispatches a call as
+`host.request` does; its first load compiled in 14 ms. Still **unverified**:
+a store install of a published app with components, an agent tool calling
+one, and any phone.
 
 | | Core module (ADR 0011) | Component (ADR 0014) |
 | --- | --- | --- |
 | Write and build it | Copy OctoSense's guest crate; `cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`, then `tools/octo wasm build` (this page) |
-| What it reaches | Its input only | The clock, random numbers and, with `storage`, the app's storage folder. Phase 3 adds the network, any host, with `net`, and the host services the app is granted. |
+| What it reaches | Its input only | The clock, random numbers and, with `storage`, the app's storage folder; with `net`, the network, any host; and the host services the app is granted. |
 | Between calls | Starts fresh every call | Keeps its state |
 | The manifest | `wasm` | `wasm`, and `requires: ["wasm-components-v1"]`; `storage` for files; `net` for HTTP |
-| App Hub's gate (`hub check`) | Admits it from app contract 1.7 | `main` refuses it. With `requires: ["wasm-components-v1"]`, even `hub stamp` answers `app <id> needs a newer host: wasm-components-v1`; without it, the gate finds `not a WebAssembly core module (magic and version 1)`. App Hub #186, in review, admits it; App Hub #188, in review, also admits `wasi:http` and `octosense:host`. |
-| OctoSense `main` (macOS, Linux and Android) | Runs it | Does not load it. [OctoSense #436](https://github.com/OctoSense-org/OctoSense/pull/436) (in review) adds the runtime; loading components in the `wasm` service is phase 2, and HTTP and host services phase 3, neither merged. |
-| `card-host` | Admits the app; every call answers `no service answers "wasm" on this device` | Has no `wasm` service either. **Unverified:** built from App Hub `main`, it runs the same manifest check as `hub`, so it should refuse the app with `app <id> needs a newer host: wasm-components-v1`. |
-| Releases | Desktop 0.1.0-rc.2 runs it on macOS and Linux; no Home release does | None runs it |
+| App Hub's gate (`hub check`) | Admits it from app contract 1.7 | `main` admits it under `requires: ["wasm-components-v1"]` (App Hub #186), with `wasi:http` and `octosense:host` imports (App Hub #188), and says what each component reaches. A `hub` older than #186 answers `app <id> needs a newer host: wasm-components-v1` at `hub stamp`; without the requirement, it finds `not a WebAssembly core module (magic and version 1)`. |
+| OctoSense `main` | Runs it on macOS, Linux and Android | Has run it since 10 October 2026 (OctoSense #451): the `wasm` service loads components from `fns/`, with HTTP to any host and `octosense:host`. Windows builds have included the service since the same change; a run there is **unverified**. Android and OpenHarmony builds link the runtime, but no component has run on a phone yet (**unverified**). |
+| `card-host` | Admits the app; every call answers `no service answers "wasm" on this device` | Has no `wasm` service either. Built from App Hub `main`, it admits the manifest, since it runs the same contract check as `hub` (**unverified** by a run here). |
+| Releases | Desktop 0.1.0-rc.2 runs it on macOS and Linux; no Home release does | None runs it. Desktop 0.1.0-rc.2 and Home 0.1.0-beta.2 refuse the manifest at install (`needs a newer host: wasm-components-v1`). |
 
 Every command on this page was run on macOS (Apple silicon) with Rust
 1.97.1, unless it is marked **unverified**. The examples use an app that
@@ -56,8 +61,8 @@ Every command on this page was run on macOS (Apple silicon) with Rust
 | Computation with crates.io crates: parsing, formats, scoring, crypto, image processing | A component | [Write a component](#write-a-component) |
 | Pure computation in an app that must run today | A core module | [Core modules](#core-modules-adr-0011) |
 | The camera, the microphone or the location | Host APIs: the `camera`, `microphone` and `location` capabilities, their permission methods and `location.get` | [HOST-API-V1 §3](HOST-API-V1.md#3-request-device-access-in-the-foreground) |
-| The network | Splash's `net`, to the hosts in `network.hosts`. A component reaches any host with `octosense_component::http` and `net` (phase 3, **unverified** in a shell): an app's network declarations are shown at install and not enforced while it runs. A core module reaches no network: fetch the data in Splash, then pass it in. | [SCRIPT-API § Network](SCRIPT-API.md#network), [Network](#network) |
-| The app's host services, such as `runtime.list` | `host.request` in Splash, or `octosense_component::host` in a component (phase 3, **unverified** in a shell) | [Host services](#host-services) |
+| The network | Splash's `net`, to the hosts in `network.hosts`. A component reaches any host with `octosense_component::http` and `net` (on OctoSense `main`; in no release yet): an app's network declarations are shown at install and not enforced while it runs. A core module reaches no network: fetch the data in Splash, then pass it in. | [SCRIPT-API § Network](SCRIPT-API.md#network), [Network](#network) |
+| The app's host services, such as `runtime.list` | `host.request` in Splash, or `octosense_component::host` in a component (on OctoSense `main`; in no release yet) | [Host services](#host-services) |
 | Files | The app's own storage, through `fs.*` in Splash, or through `std::fs` in a component when the app has `storage`. | [SCRIPT-API § Storage](SCRIPT-API.md#storage-fs) |
 | Something a Rust crate already does | Not by calling the crate from Splash. Build it into a component ([Write a component](#write-a-component); first run `tools/octo wasm doctor`, which names the crates whose job OctoSense already does), or into a core module for pure computation; propose a shared host service in OctoSense and contribute its adapter, with method descriptors, app-scoped resources and tests ([HOST-SERVICES § Add a host service](HOST-SERVICES.md#add-a-host-service)); or run it in your own backend, reached through `net` or the authenticated backend API ([HOST-API-V1 §4](HOST-API-V1.md#4-connect-the-apps-backend)). A crate in a shell's `Cargo.lock` is not callable from Splash, and a `.so`, `.dylib` or `Cargo.toml` in a bundle adds nothing: the gate refuses it. | This page, [HOST-SERVICES](HOST-SERVICES.md), [HOST-API-V1 §4](HOST-API-V1.md#4-connect-the-apps-backend) |
 | A native library, threads or OS calls | Not available to a store app. App Hub's gate refuses native libraries, and native code ships only inside a shell release. | App Hub's [delivery paths](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/DEVELOPMENT.md#choose-a-delivery-path) |
@@ -183,8 +188,8 @@ nothing or one value) a WIT variant. [Types](#types) lists what a function may
 take and return.
 
 Names keep your Rust spelling in the script. WIT spells `parse_number` and a
-field `word_count` in kebab case (`parse-number`, `word-count`), and ADR
-0014's phase 2 calls `wasm.parse_number` and returns `word_count`. The kebab
+field `word_count` in kebab case (`parse-number`, `word-count`), and the
+`wasm` service accepts `wasm.parse_number` and returns `word_count`. The kebab
 spellings are accepted on the way in too.
 
 A type the macro cannot map fails the build with what to use instead. For
@@ -285,7 +290,9 @@ always reads from the file itself.
 
 ### 5. Call it from the app
 
-**Unverified:** no shell runs components yet; this follows ADR 0014.
+Verified through the `wasm` service's test harness, built from OctoSense
+`main` on 10 October 2026 (see the top of this page), not from a running
+app; no release runs it yet.
 
 ```splash
 host.request("wasm.count", {text: "one two\nthree"}, fn(r){
@@ -312,23 +319,35 @@ An agent tool maps to a component's function as to a module's, with
 ### 6. Test it
 
 - Test the logic natively with `cargo test`, as in step 3.
+- `tools/octo wasm call <function> [JSON]` calls one function of the built
+  component from the command line, through OctoSense's `wasm_call` example
+  ([OctoSense #455](https://github.com/OctoSense-org/OctoSense/pull/455), in review; verified here against its head). It needs an
+  OctoSense checkout that carries that change, its branch until it merges and
+  then `main` (`OCTOSENSE_REPO`, or `OctoSense` beside this repository), and
+  its first run compiles the runtime. Each call gets a fresh instance, and
+  `octosense:host` calls fail with `needs a shell`; the rest runs as in the
+  shell.
 - `tools/octo run` starts the app in `card-host`, which has no `wasm`
   service, so every call answers `no service answers "wasm" on this device`.
   Use it for the layout and for what the app shows without its functions.
-  Whether App Hub `main`'s `card-host` admits the manifest at all is
-  **unverified** (see the table at the top).
-- `tools/octo check` runs App Hub's gate. With App Hub `main`'s `hub`, it
-  stops at the stamp: `hub: app dev.example.texttools needs a newer host: wasm-components-v1`.
-  With App Hub #186's, the gate admits the component and tells the reviewer
-  what it reaches ([What the gate checks](#what-the-gate-checks)).
-- Running the app's functions in OctoSense needs ADR 0014's phase 2, and is
-  **unverified**. Once it lands, test as for a module
-  ([Test it](#test-it), steps 2 to 9). A function that sends HTTP requests
-  or calls host services needs phase 3 as well.
+  Built from App Hub `main`, `card-host` admits the manifest (**unverified**
+  by a run here; see the table at the top).
+- `tools/octo check` runs App Hub's gate. With `hub` built from App Hub
+  `main`, the gate admits the component and tells the reviewer what it
+  reaches ([What the gate checks](#what-the-gate-checks)). A `hub` older than
+  App Hub #186 stops at the stamp:
+  `hub: app dev.example.texttools needs a newer host: wasm-components-v1`.
+  A fresh `tools/octo new` app is refused until the screenshot its listing
+  names exists; `tools/octo check` says how to capture one.
+- Running the app's functions in OctoSense needs a shell built from `main` at
+  or after OctoSense #451, since no release runs components yet. Test as for
+  a module ([Test it](#test-it), steps 2 to 9). The desktop app was not run
+  here (**unverified**); the service's own test harness was (see the top of
+  this page).
 
 The SDK's own tests build its examples and the template with plain cargo for
 `wasm32-wasip2`, load them in Wasmtime 49 with WASI 0.2 as ADR 0014's
-runtime does, and call every function. For phase 3 they link `wasi:http`
+runtime does, and call every function. For HTTP and host services they link `wasi:http`
 (`wasmtime-wasi-http` 49) and `octosense:host` as OctoSense's runtime does,
 with copies of its hooks: the `http-client` example sends requests to a local
 HTTP/1.1 server, by address and by name, with no grant, and one to a server
@@ -377,9 +396,12 @@ crate list names the SDK's source as `path` instead of
 `git+https://github.com/OctoSense-org/OctoSense-App-Flow#<commit>`, so the
 file differs from the release's there (82,969 bytes). A release run on GitHub
 is **unverified**. The publisher toolchain (`tools/publisher-toolchain.json`)
-names App Hub `769e9ee3`, the merge of App Hub #186, whose gate admits
-components; one that imports `wasi:http` or `octosense:host` also needs a
-toolchain revision with App Hub #188.
+names App Hub `40abb23b`, the merge of App Hub #191: the App Hub revision
+OctoSense `main` carries, whose gate admits components with `wasi:http` and
+`octosense:host` imports (App Hub #186 and #188); it also includes App Hub
+#190, shared components in the catalog. It predates App Hub #189, so this
+`hub` prints no crate list and runs no advisory check; a `hub` built from
+App Hub `main` at or after #189 does.
 
 ## What a component can use
 
@@ -412,9 +434,9 @@ maps and sets (use `Vec<(K, V)>`, `Vec<T>` or a `pub struct`), `Box`, `Rc`,
 
 ### What it reaches
 
-ADR 0014 gives a component the WASI 0.2 interfaces below, and phase 3 adds
-`octosense:host`. The SDK's tests use the same set in Wasmtime 49; inside the
-shell it is **unverified** until phases 2 and 3 land.
+ADR 0014 gives a component the WASI 0.2 interfaces below and
+`octosense:host`. The SDK's tests use the same set in Wasmtime 49, and
+OctoSense `main`'s `wasm` service gives the same (OctoSense #451).
 
 | | A component |
 | --- | --- |
@@ -422,23 +444,24 @@ shell it is **unverified** until phases 2 and 3 land.
 | Files | Only with `storage`: the app's storage folder is `/`, read and write, through `std::fs`; nothing else of the device's files. Without `storage`, it has no folder. |
 | stdout and stderr | They become the app's log lines |
 | The environment, arguments and stdin | Empty |
-| The network | Phase 3: any host, over HTTPS or plain HTTP, through `wasi:http`, with `net` in the manifest ([Network](#network)). It has no sockets: `wasi:sockets` is refused. |
+| The network | Any host, over HTTPS or plain HTTP, through `wasi:http`, with `net` in the manifest ([Network](#network)). It has no sockets: `wasi:sockets` is refused. |
 | Threads | No: `wasm32-wasip2` has none |
-| Host services | Phase 3: the services the app is granted, as its script calls them, through `octosense:host` ([Host services](#host-services)) |
+| Host services | The services the app is granted, as its script calls them, through `octosense:host` ([Host services](#host-services)) |
 | Other apps | No |
 
 ### Network
 
-**Unverified in a shell:** OctoSense's phase 3 runtime is not merged. The
-SDK's tests send these requests in Wasmtime 49 to a local server, with a copy
-of OctoSense's runtime hook.
+On OctoSense `main` since OctoSense #451 (10 October 2026); in no release
+yet. OctoSense's own tests send a component's requests to a local server, and
+the SDK's tests do the same in Wasmtime 49, with a copy of OctoSense's runtime
+hook. Not run in a shell here.
 
 A component reaches the network only through `wasi:http`, and it reaches any
 host. Under OctoSense's ruling of 8 October 2026, an app's network
 declarations (`net`, `network.hosts`) are shown at install and not enforced
 while the app runs: the OS and the host's API surface are the boundary. The
 manifest still needs `net`, so that the app's permissions say it uses the
-network (App Hub #188's gate refuses a component that imports `wasi:http`
+network (App Hub's gate refuses a component that imports `wasi:http`
 without it; see [What the gate checks](#what-the-gate-checks)):
 
 ```json
@@ -489,7 +512,7 @@ component imports `wasi:http` only when it calls these functions, and a
 crate that opens sockets, such as `reqwest`, `ureq` or `tokio`'s `net`,
 still does not work.
 
-OctoSense's phase 3 runtime, not merged, handles every request this way:
+OctoSense `main`'s runtime (OctoSense #451) handles every request this way:
 
 - The request goes to whatever host its URL names, over HTTPS or plain HTTP,
   this device and its local network included. The runtime refuses no
@@ -520,9 +543,9 @@ bundle/manifest.json:
 
 ### Host services
 
-**Unverified in a shell:** OctoSense's phase 3 runtime is not merged. The
-SDK's tests call fake host services in Wasmtime 49, held to a copy of
-OctoSense's rules.
+On OctoSense `main` since OctoSense #451 (10 October 2026); in no release
+yet. The SDK's tests call fake host services in Wasmtime 49, held to a copy of
+OctoSense's rules. Not run in a shell here.
 
 `octosense_component::host::request(service, args)` calls one of the app's
 host services as its script's `host.request` does: `service` is
@@ -547,7 +570,10 @@ pub mod functions {
 The component imports `octosense:host/services@0.1.0` only when it calls
 `host::request`. The SDK carries the interface's WIT, OctoSense's
 [`octosense-host.wit`](../sdk/rust/octosense-component/wit/octosense-host.wit).
-ADR 0014's phase 3 holds every call to these rules:
+OctoSense `main` holds every call to these rules
+([OctoSense #452](https://github.com/OctoSense-org/OctoSense/pull/452), in review, drops the declared-families rule in the first item: a call then
+reaches the dispatcher whatever the manifest declares, and a service that
+needs a grant checks it itself):
 
 - The import needs no grant of its own. A call reaches only the families the
   manifest grants in `capabilities` (a system app's own namespace too), so
@@ -572,9 +598,10 @@ One instance of each component lives for as long as the app's worker, so a
 call. A trap or a deadline ends the instance, and the next call starts a new
 one. An app update, a changed grant or a withdrawal discards it, as for
 modules (ADR 0014). The SDK's tests show a `static` counter kept between two
-calls on one instance; how long the shell keeps the instance is
-**unverified** until phase 2 lands. Keep what must survive in the app's
-storage.
+calls on one instance; the shell keeps the instance while the app's worker
+lives, and a worker that holds a component's instance exits after 60 idle
+seconds (one that runs only modules, after 5). Keep what must survive in the
+app's storage.
 
 ### What cannot build or run
 
@@ -631,10 +658,12 @@ component reaches the network with `octosense_component::http` instead
 
 `tools/octo wasm build` records in each component the crates it is built
 from, and the release workflow records the same list
-([7. Publish it](#7-publish-it)). App Hub's gate is to show the list to the
-reviewers and check it against the
-[RustSec advisory database](https://rustsec.org/). That side is in review in
-App Hub, so it is **unverified** here.
+([7. Publish it](#7-publish-it)). App Hub's gate shows the list to the
+reviewers and checks it against the
+[RustSec advisory database](https://rustsec.org/). App Hub `main` does both
+since App Hub #189: `hub check` printed `is built from 6 crates: …` for the
+template here, and `hub check --advisory-db <dir>` checks the list against the
+database (not run here).
 
 The list names every package whose code the component links: what the
 crate's normal dependencies reach for `wasm32-wasip2`, as
@@ -660,8 +689,8 @@ component with the section and runs it as before: the SDK's end-to-end tests
 passed on a `markdown-tools` component that carried its list
 (`OCTOSENSE_COMPONENT_WASM=<file> cargo test --locked -p octosense-component-e2e`,
 in `sdk/rust/`).
-Whether the shell's `wasm` service loads one is **unverified**, as no shell
-runs components yet.
+The shell's `wasm` service loads one: this page's template, built with the
+SDK by path, answered through it here.
 
 `tools/octo wasm info` prints the list. For the template, built with the SDK
 by path:
@@ -681,18 +710,18 @@ another way says `crates: not recorded`.
 
 ### What the gate checks
 
-These findings come from App Hub #186 and, for `wasi:http` and
-`octosense:host`, App Hub #188, both in review. App Hub `main` refuses a
-bundle that requires `wasm-components-v1` before any check runs. With #186,
-`tools/octo check` on the example app prints, besides its other findings:
+These findings come from App Hub `main`: App Hub #186 and, for `wasi:http`
+and `octosense:host`, App Hub #188, merged on 9 and 10 October 2026. A `hub`
+older than #186 refuses a bundle that requires `wasm-components-v1` before
+any check runs. On the example app, `tools/octo check` prints, besides its
+other findings:
 
 ```text
   [warning] functions (fns/text-tools.wasm): fns/text-tools.wasm is a component that reaches the clock, but no files, network or other app
 ```
 
-With a `hub` built from #188, and the [Network](#network) and
-[Host services](#host-services) components in the bundle, the lines for
-those two are:
+With the [Network](#network) and [Host services](#host-services)
+components in the bundle, the lines for those two are:
 
 ```text
   [warning] functions (fns/api-client.wasm): fns/api-client.wasm is a component that reaches the clock and the network, but no files or other app
@@ -1122,7 +1151,7 @@ build.
    | `[refused] functions: the bundle carries 9 WebAssembly modules, over the 8 it may` | Put the functions in 8 modules or fewer. |
    | `[refused] contents-invalid (fns/MyFunctions.wasm): a function module is named fns/<name>.wasm, the name [a-z0-9_-] and at most 64 characters` | Rename the file, and keep it directly in `fns/`. |
    | `[refused] contents-invalid (lib/x.wasm): a WebAssembly module belongs in fns/, as fns/<name>.wasm` | Move the file into `fns/`. |
-   | `[refused] contents-invalid (fns/x.wasm): not a WebAssembly core module (magic and version 1)` | Ship a core module built for `wasm32-unknown-unknown`. A component needs a gate with App Hub #186 ([What the gate checks](#what-the-gate-checks)). |
+   | `[refused] contents-invalid (fns/x.wasm): not a WebAssembly core module (magic and version 1)` | Ship a core module built for `wasm32-unknown-unknown`. A component needs a `hub` at or after App Hub #186 ([What the gate checks](#what-the-gate-checks)). |
    | `[warning] functions: the bundle declares the wasm capability but carries no fns/*.wasm` | Copy the module into `bundle/fns/` ([Build it](#build-it), step 3). |
    | `hub: the bundle exceeds the size limit` | Bring the bundle's files under 8 MiB. |
 
@@ -1320,23 +1349,23 @@ describes (**unverified**).
 
 OctoSense's [ADR 0011](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0011-apps-own-functions-in-webassembly.md)
 records the design for modules, and
-[ADR 0014](https://github.com/OctoSense-org/OctoSense/pull/436) the design for
-components, with its phases. These items are open:
+[ADR 0014](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0014-app-components-in-webassembly.md) the design for
+components, with its phases. The state of each item:
 
 | Item | Status |
 | --- | --- |
-| Components in a shell (ADR 0014, phase 2) | Not merged: the `wasm` service loading components from `fns/`, one instance per app, the storage grant and its quota, and a larger input limit than a module's. Until it lands, no app's component runs. |
-| App Hub's gate for components | [App Hub #186](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/186), in review: it admits components under `wasm-components-v1` and adds `hub component-info`. |
-| App Hub's use of the crate list | In review in App Hub: the gate showing a component's `octosense-crates` list to reviewers and checking it against the RustSec advisory database ([The crates it is built from](#the-crates-it-is-built-from)). |
+| Components in a shell (ADR 0014, phase 2) | Merged in OctoSense #451 (10 October 2026): the `wasm` service loads components from `fns/`, with one instance per app, the storage grant and its quota, and a larger input limit than a module's. No release has it yet. |
+| App Hub's gate for components | Merged: [App Hub #186](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/186) admits components under `wasm-components-v1` and adds `hub component-info`; [App Hub #188](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/188) admits `wasi:http` (with `net`) and `octosense:host`. |
+| App Hub's use of the crate list | Merged in [App Hub #189](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/189): reviewers see a component's `octosense-crates` list, and `hub check --advisory-db` checks it against the RustSec advisory database ([The crates it is built from](#the-crates-it-is-built-from)). |
 | The SDK on crates.io | Not yet. ADR 0014 publishes it there with a maintainer's approval; until then, a crate depends on it by a git commit or a path. |
-| Outgoing HTTP and host services from a component (phase 3) | Not merged: OctoSense's runtime for `wasi:http`, which reaches any host (network declarations are shown at install and not enforced while the app runs, by OctoSense's ruling of 8 October 2026), and for `octosense:host`, with `host.request`'s checks. [App Hub #188](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/188), in review, admits both imports, `wasi:http` with `net`. The SDK's `http` and `host` modules and `tools/octo wasm` support them; their tests run them in Wasmtime 49 against a local server and fake host services. |
-| Compiling at install time, so a phone skips the first compile (phase 3) | Not yet, for modules or components. A module's first call compiles it: ADR 0011 measured 27–33 ms on a desktop and 378–421 ms on a mid-range Android phone, and 5–11 ms for later loads from the cache on that phone. |
-| Shared components in App Hub's catalog (phase 4) | Not yet. |
+| Outgoing HTTP and host services from a component (phase 3) | Merged in OctoSense #451: `wasi:http` reaches any host (network declarations are shown at install and not enforced while the app runs, by OctoSense's ruling of 8 October 2026), and `octosense:host` reaches the host services with `host.request`'s checks; [OctoSense #452](https://github.com/OctoSense-org/OctoSense/pull/452), in review, drops the check of the declared families. The SDK's `http` and `host` modules and `tools/octo wasm` support them; their tests run them in Wasmtime 49 against a local server and fake host services. |
+| Compiling at install time, so a phone skips the first compile (phase 3) | Merged in OctoSense #451 for an installed app's functions, which are compiled into the disk cache when the app is installed or updated; a system app's are compiled at its first call. ADR 0011 measured a first compile at 27–33 ms on a desktop and 378–421 ms on a mid-range Android phone, and 5–11 ms for later loads from the cache on that phone. |
+| Shared components in App Hub's catalog (phase 4) | [App Hub #190](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/190), merged, publishes them in the catalog; the `wasm` service loading an app's pinned shared components is [OctoSense #454](https://github.com/OctoSense-org/OctoSense/pull/454), a draft. No catalog has published one yet. |
 | A CPU budget per app | Not yet. The limits apply per call, so an app can keep one core busy with back-to-back calls. |
 | Agent tools with a live model | Unverified. OctoSense's tests call Wasm Lab's tools through the shell's tool executor, without a model. |
-| Windows | Not yet. Builds for Windows leave the runtime out until it has been checked there. |
-| iOS | Not yet. Builds for iOS leave the runtime out. iOS allows no JIT for apps, so Wasmtime would have to use its Pulley interpreter, about 17 times slower than Cranelift; ADR 0014 plans that for phase 3. iOS also allows no downloaded native code, so a store app's functions cannot be compiled ahead of time there either. |
-| OpenHarmony | Not yet. Its JIT policy is unknown, so builds for OpenHarmony leave the runtime out; ADR 0014 plans Pulley there too until it is known. |
+| Windows | Builds for Windows have included the service since OctoSense #451, with the runtime's tests in CI; a desktop run on Windows is **unverified**. Desktop 0.1.0-rc.2's Windows build leaves it out. |
+| iOS | Not yet. Builds for iOS leave the runtime out. iOS allows no JIT for apps, so Wasmtime would have to use its Pulley interpreter, which OctoSense #451 added and tests for OpenHarmony, and which ADR 0014 measured at about 32 times slower than Cranelift. iOS also allows no downloaded native code, so a store app's functions cannot be compiled ahead of time there either. |
+| OpenHarmony | Included since OctoSense #451, running in Pulley until its JIT policy is known; Home's OpenHarmony release build compiled with the service, and no device has run it (**unverified**). |
 | Deterministic limits (fuel) | Not decided. |
 
 ## See also
@@ -1344,7 +1373,7 @@ components, with its phases. These items are open:
 - OctoSense's [WebAssembly in OctoSense](https://github.com/OctoSense-org/OctoSense/blob/main/docs/wasm.md):
   how the `wasm` service works on `main`, with its limits, platforms and
   tests.
-- OctoSense's ADR 0014, in [OctoSense #436](https://github.com/OctoSense-org/OctoSense/pull/436):
+- OctoSense's [ADR 0014](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0014-app-components-in-webassembly.md):
   components, their WASI subset, the JSON mapping and the phases.
 - This repository's SDK, [sdk/rust/](../sdk/rust/README.md): the
   `octosense-component` crate with its macro and its `http` and `host`

@@ -562,7 +562,16 @@ def cmd_check(args, extra):
         cmd += ["--publisher-key", key]
     cmd += extra
     print("octo: " + " ".join(cmd), flush=True)
-    r = subprocess.run(cmd)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    out = (r.stdout if isinstance(r.stdout, str) else "") + (r.stderr if isinstance(r.stderr, str) else "")
+    sys.stdout.write(out)
+    sys.stdout.flush()
+    # A fresh `tools/octo new` app is refused for the screenshot its listing
+    # names and nobody has captured yet: say how to capture it.
+    if r.returncode != 0 and "is named by the listing but is not in the bundle" in out and "screenshots/" in out:
+        print(f"octo: hint: capture the screenshots the listing names from the running app: "
+              f"`tools/octo run {bundle} --detach`, then `tools/octo shot 8141 {bundle / 'screenshots' / '01-main.png'}`. "
+              "A reviewer expects real captures of the app, not placeholders.")
     # Things the gate does not look at, but a reviewer will.
     listing_path = bundle / "listing.json"
     if listing_path.is_file():
@@ -1295,8 +1304,56 @@ def cmd_wasm_info(args):
     return 0
 
 
+WASM_CALL_EXAMPLE = Path("crates/wasm-host/examples/wasm_call.rs")
+
+
+def octosense_repo():
+    """The OctoSense checkout: $OCTOSENSE_REPO, else a sibling of this repo."""
+    env = os.environ.get("OCTOSENSE_REPO")
+    if env:
+        return Path(env).expanduser().resolve()
+    sibling = REPO.parent / "OctoSense"
+    return sibling.resolve() if sibling.is_dir() else None
+
+
+def cmd_wasm_call(args):
+    """Call one function of a built component through OctoSense's `wasm_call`
+    example (OctoSense #455): the runtime the shell uses, outside a shell."""
+    app = Path(args.app or ".").expanduser().resolve()
+    if args.file:
+        file = Path(args.file).expanduser().resolve()
+    else:
+        fns = app / "bundle" / "fns"
+        files = sorted(fns.glob("*.wasm")) if fns.is_dir() else []
+        if not files:
+            die(f"{fns} holds no .wasm file: run `tools/octo wasm build --app {app}` first, or name one with --file")
+        if len(files) > 1:
+            die(f"{fns} holds {len(files)} .wasm files ({', '.join(f.name for f in files)}): name one with --file")
+        file = files[0]
+    if not file.is_file():
+        die(f"{file}: no such file")
+    repo = octosense_repo()
+    if repo is None:
+        die("no OctoSense checkout found: set $OCTOSENSE_REPO, or clone OctoSense-org/OctoSense beside this repository")
+    if not (repo / WASM_CALL_EXAMPLE).is_file():
+        die(f"{repo} has no {WASM_CALL_EXAMPLE}: `tools/octo wasm call` needs an OctoSense checkout that carries "
+            "OctoSense #455 (its branch until it merges, then main)")
+    if not (repo / ".sources").is_dir():
+        print(f"octo: note: {repo} has no .sources/ yet; if cargo cannot read the workspace, run "
+              f"`python3 tools/setup.py` there first", file=sys.stderr)
+    function = args.function[len("wasm."):] if args.function.startswith("wasm.") else args.function
+    cmd = ["cargo", "run", "-q", "-p", "octosense-wasm-host", "--example", "wasm_call", "--", str(file), function]
+    if args.args is not None:
+        cmd.append(args.args)
+    if args.storage:
+        cmd += ["--storage", str(Path(args.storage).expanduser().resolve())]
+    print(f"octo: {' '.join(cmd)}  (in {repo}; a checkout's first run compiles the runtime)", file=sys.stderr, flush=True)
+    return subprocess.run(cmd, cwd=str(repo)).returncode
+
+
 def cmd_wasm(args, parser):
-    handlers = {"new": cmd_wasm_new, "build": cmd_wasm_build, "doctor": cmd_wasm_doctor, "info": cmd_wasm_info}
+    handlers = {"new": cmd_wasm_new, "build": cmd_wasm_build, "call": cmd_wasm_call, "doctor": cmd_wasm_doctor,
+                "info": cmd_wasm_info}
     if args.wasm_cmd not in handlers:
         parser.print_help()
         return 0
@@ -1366,6 +1423,15 @@ def main():
                                        "each is built from, and update the manifest")
     wb.add_argument("--app", metavar="DIR", help="the app's directory, which holds bundle/ (default: the current directory)")
     wb.add_argument("--crate", action="append", metavar="DIR", help="a crate to build (repeatable; default: every <app>/components/*/)")
+    wc = wsub.add_parser("call", help="call one function of the built component from the command line, through "
+                                      "OctoSense's wasm_call example (an OctoSense checkout at or after OctoSense #455)")
+    wc.add_argument("function", help="the function, as the script calls it: count, or wasm.count")
+    wc.add_argument("args", nargs="?", help="its arguments as JSON: an object keyed by parameter name, an array in "
+                                            "parameter order, or one value (default: no arguments)")
+    wc.add_argument("--app", metavar="DIR", help="the app's directory, which holds bundle/ (default: the current directory)")
+    wc.add_argument("--file", metavar="FILE", help="the function file (default: the one .wasm file in <app>/bundle/fns/)")
+    wc.add_argument("--storage", metavar="DIR", help="a folder the component sees as its app storage (/), for one "
+                                                     "that imports wasi:filesystem")
     wd = wsub.add_parser("doctor", help="check Rust, the wasm32-wasip2 target and a crate's dependencies, "
                                         "and name what OctoSense already provides")
     wd.add_argument("--crate", action="append", metavar="DIR", help="a crate to check (repeatable; default: every ./components/*/)")

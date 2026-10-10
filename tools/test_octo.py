@@ -55,6 +55,66 @@ class Onboarding(unittest.TestCase):
             self.assertEqual(done.exception.code,0)
             self.assertEqual(run.call_args.args[0],[str(hub),'check',str(bundle.resolve()),'--catalog','catalog.json','--publisher-key','one=key','--publisher-key','two=key','--offline'])
 
+    def test_check_says_how_to_capture_a_screenshot_the_listing_names(self):
+        with tempfile.TemporaryDirectory() as temp:
+            bundle=Path(temp)
+            hub=bundle/'fixture-tools'/'hub'
+            (bundle/'manifest.json').write_text(json.dumps({'integrity':{'signature':'signed fixture'}}))
+            refusal=('dev.example.texttools 0.1.0 — REFUSED\n'
+                     '  [refused] listing: screenshots/01-main.png is named by the listing but is not in the bundle\n'
+                     'hub: the bundle was refused\n')
+            out=io.StringIO()
+            with patch('sys.argv',['octo','check',str(bundle)]), patch.object(octo,'need',return_value=hub), patch.object(octo.subprocess,'run') as run, contextlib.redirect_stdout(out), self.assertRaises(SystemExit) as done:
+                run.return_value.returncode=1
+                run.return_value.stdout=refusal
+                run.return_value.stderr=''
+                octo.main()
+            self.assertEqual(done.exception.code,1)
+            text=out.getvalue()
+            self.assertIn(refusal,text)
+            self.assertIn('octo: hint: capture the screenshots the listing names',text)
+            self.assertIn(f"tools/octo shot 8141 {bundle.resolve()/'screenshots'/'01-main.png'}",text)
+            # A refusal for another reason gets no screenshot hint.
+            out=io.StringIO()
+            with patch('sys.argv',['octo','check',str(bundle)]), patch.object(octo,'need',return_value=hub), patch.object(octo.subprocess,'run') as run, contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+                run.return_value.returncode=1
+                run.return_value.stdout='  [refused] contents-invalid (fns/x.wasm): not a WebAssembly core module\n'
+                run.return_value.stderr=''
+                octo.main()
+            self.assertNotIn('octo: hint:',out.getvalue())
+
+    def test_wasm_call_runs_octosenses_example_on_the_built_component(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            app=root/'app'
+            (app/'bundle'/'fns').mkdir(parents=True)
+            wasm=app/'bundle'/'fns'/'text-tools.wasm'
+            wasm.write_bytes(b'\0asm\x0d\0\x01\0')
+            repo=root/'OctoSense'
+            (repo/'crates'/'wasm-host'/'examples').mkdir(parents=True)
+            (repo/'.sources').mkdir()
+            argv=['octo','wasm','call','wasm.count','{"text":"a b"}','--app',str(app)]
+            # Without OctoSense #455's example, it says what it needs.
+            with patch.dict('os.environ',{'OCTOSENSE_REPO':str(repo)}), patch('sys.argv',argv), patch.object(octo.subprocess,'run') as run, contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as done:
+                octo.main()
+            self.assertEqual(done.exception.code,1)
+            self.assertIn('OctoSense #455',err.getvalue())
+            run.assert_not_called()
+            (repo/'crates'/'wasm-host'/'examples'/'wasm_call.rs').write_text('fn main() {}\n')
+            with patch.dict('os.environ',{'OCTOSENSE_REPO':str(repo)}), patch('sys.argv',argv), patch.object(octo.subprocess,'run') as run, contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as done:
+                run.return_value.returncode=0
+                octo.main()
+            self.assertEqual(done.exception.code,0)
+            self.assertEqual(run.call_args.args[0],['cargo','run','-q','-p','octosense-wasm-host','--example','wasm_call','--',str(wasm.resolve()),'count','{"text":"a b"}'])
+            self.assertEqual(run.call_args.kwargs['cwd'],str(repo.resolve()))
+            # Two function files: name one.
+            (app/'bundle'/'fns'/'other.wasm').write_bytes(b'\0asm\x0d\0\x01\0')
+            with patch.dict('os.environ',{'OCTOSENSE_REPO':str(repo)}), patch('sys.argv',argv), patch.object(octo.subprocess,'run') as run, contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit) as done:
+                octo.main()
+            self.assertEqual(done.exception.code,1)
+            self.assertIn('--file',err.getvalue())
+            run.assert_not_called()
+
     def test_reserved_ids_and_namespaces_leave_no_partial_project(self):
         names = ('agents apphub appcard browser calculator card clock dev notes octos octoscode os '
                  'reference reminders rinx sheets shell system task terminal toolbox weather workflow').split()
