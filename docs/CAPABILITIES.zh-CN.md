@@ -47,7 +47,7 @@
 
 | 能力 | 脚本得到什么 | 未申请时 |
 | --- | --- | --- |
-| `net` | `net.http_request` 和 `net.web_socket`，只能访问 `network.hosts` 中列出的主机。主机必须写成精确的小写纯主机名：不带协议、路径、端口或通配符。组件的 `wasi:http` 请求同样需要 `net`，但可以访问任何主机：按 OctoSense 2026 年 10 月 8 日的裁定，应用的网络声明在安装时展示，运行时不强制（OctoSense ADR 0014 第 3 阶段，尚未合并；见 [RUST § 网络](RUST.zh-CN.md#网络)）。 | 脚本中根本没有 `net`：`variable net not found in scope`。申请了 `net` 但主机列表为空时也是如此。 |
+| `net` | `net.http_request` 和 `net.web_socket`，只能访问 `network.hosts` 中列出的主机。主机必须写成精确的小写纯主机名：不带协议、路径、端口或通配符。组件的 `wasi:http` 请求同样需要 `net`，但可以访问任何主机：按 OctoSense 2026 年 10 月 8 日的裁定，应用的网络声明在安装时展示，运行时不强制（已在 OctoSense `main` 上实现，尚无发行版包含；见 [RUST § 网络](RUST.zh-CN.md#网络)）。 | 脚本中根本没有 `net`：`variable net not found in scope`。申请了 `net` 但主机列表为空时也是如此。 |
 | `images` | 任何公开 `https://` 主机上的图片（`Image{src: http_resource(url)}`），不限于 `network.hosts`，例如 RSS 阅读器的缩略图。`net.http_request` 的访问范围不会因此扩大。 | 只能加载已列出主机上的图片。 |
 | `web` | `WebReader` 可以在系统的网页视图中打开任何公开的 `https://` 网页。网页无法反过来访问应用。可用性取决于[宿主与平台限制](../README.zh-CN.md#下载兼容-shell)。 | `WebReader.open` 只能打开已列出主机上的网页，其他一律拒绝：``refused <url>: not on this app's host list, and no `web` grant``。 |
 
@@ -84,7 +84,7 @@ this app was not granted "mail", which "mail.accounts" needs
 | `glance` | `glance.publish`、`glance.withdraw` 和 `glance.list`：在速览栏上发布卡片，这些卡片只会打开本应用。见 [AI-SERVICES § 发布到速览栏](AI-SERVICES.zh-CN.md#发布到速览栏)。 |
 | `model` | `model.complete` 和 `model.budget`：通过用户自己的 AI 提供商进行一次性模型调用，结果按应用的 JSON Schema 校验，并受每日预算限制。见[一次性调用](AI-SERVICES.zh-CN.md#一次性模型调用model)。OctoSense #368 中的[媒体与嵌入向量](AI-SERVICES.zh-CN.md#媒体与嵌入向量model) 使用同一能力，自[桌面 RC1](../README.zh-CN.md#下载兼容-shell) 起包含；beta.2 和 `card-host` 不提供这些方法。提供商权益与真实调用验证需单独确认。 |
 | `runtime` | `runtime.list` 和 `runtime.describe`：当前构建实现了哪些宿主 API，不含任何账户数据。桌面 RC1、RC2 和 `card-host` 都会响应；desktop-v0.1.0-beta.2 拒绝这项能力。见 [HOST-API-V1 §2](HOST-API-V1.zh-CN.md#2-提供可选功能前先查询)。 |
-| `wasm` | 应用自带的函数：应用包 `fns/` 中的 WebAssembly 模块（最多 8 个），由宿主的 `wasm` 服务在沙盒中运行，有截止时间和内存上限。函数只拿到自己的输入，接触不到文件、网络、时钟或其他应用。Agent 工具可以用 `host_method: "wasm.<function>"` 运行其中一个函数。商店显示的说明是“Run its own sandboxed functions on this device”。桌面 RC2 在 macOS 和 Linux 上提供这项服务，Android 上的标准 Home 源码构建也提供，属于有限支持；Windows、iOS 和 OpenHarmony 的构建不包含它，RC1 也没有提供。WebAssembly 组件（OctoSense ADR 0014，目前还没有任何 OctoSense 构建加载它）还能访问时钟、随机数，有 `storage` 时还能访问应用的存储文件夹，并且需要 `requires: ["wasm-components-v1"]`。尚未合并的 ADR 0014 第 3 阶段还让它在有 `net` 时访问网络（任何主机：`network.hosts` 在安装时展示，不强制），并调用应用获授权的宿主服务。函数的编写、构建和调用方法见 [RUST](RUST.zh-CN.md)。 |
+| `wasm` | 应用自带的函数：应用包 `fns/` 中的 WebAssembly 模块（最多 8 个），由宿主的 `wasm` 服务在沙盒中运行，有截止时间和内存上限。函数只拿到自己的输入，接触不到文件、网络、时钟或其他应用。Agent 工具可以用 `host_method: "wasm.<function>"` 运行其中一个函数。商店显示的说明是“Run its own sandboxed functions on this device”。桌面 RC2 在 macOS 和 Linux 上提供这项服务，Android 上的标准 Home 源码构建也提供，属于有限支持；Windows、iOS 和 OpenHarmony 的构建不包含它，RC1 也没有提供。WebAssembly 组件（OctoSense ADR 0014；自 2026 年 10 月 10 日起已在 OctoSense `main` 上，尚无发行版包含）还能访问时钟、随机数，有 `storage` 时还能访问应用的存储文件夹，并且需要 `requires: ["wasm-components-v1"]`；有 `net` 时它还能访问网络（任何主机：`network.hosts` 在安装时展示，不强制），并能调用应用获授权的宿主服务。函数的编写、构建和调用方法见 [RUST](RUST.zh-CN.md)。 |
 | `device_calendar` | 从 RC2 起：操作系统中已配置的日历。`device_calendar.permission.request` 请求用户授权和操作系统权限，`calendars.list` 和 `calendars.select` 选择日历并返回句柄，`events.list` 和 `events.get` 读取日程（重复日程和参与者只读），`events.create`、`events.update` 和 `events.delete` 要等用户在原生审阅界面上亲手点按。需要 `requires: ["host-api-v1"]`。在 macOS（EventKit）和 Android Home 上提供；与系统日历的实际交互仍待验收。与 `calendar`（Calendar 自己的服务）和 `gcalendar`（Google）是不同的服务。 |
 
 除 `runtime` 外，这些服务都不在 `card-host` 中运行，在那里每次调用都返回 `no service answers "<family>" on this device`。请在 OctoSense Shell 中测试它们。
