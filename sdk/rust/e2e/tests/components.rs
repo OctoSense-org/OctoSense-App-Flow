@@ -12,7 +12,6 @@
 //! call's deadline ([`Network`]), and `octosense:host`, whose calls reach
 //! fake host services ([`Services`]).
 
-use std::collections::BTreeSet;
 use std::future::Future;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
@@ -119,20 +118,20 @@ fn clamped(options: RequestOptions, left: Option<Duration>) -> RequestOptions {
 const NETWORK_DEADLINE: Duration = Duration::from_secs(10);
 
 /// Fake host services behind `octosense:host`, held to OctoSense's rules
-/// (ADR 0014 phase 3, its `crates/shell/src/wasm_service.rs`): an app calls
-/// only the families its manifest grants, never `wasm.*`, with JSON
-/// arguments. These answer `runtime.list` and echo `notes.get`.
+/// (ADR 0014 phase 3, its `crates/shell/src/wasm_service.rs`): a call reaches
+/// the dispatcher whatever the manifest declares (OctoSense #452; a service
+/// that needs a grant checks the manifest itself), never `wasm.*`, with JSON
+/// arguments. These answer `runtime.list` and echo `notes.get`; a family no
+/// service answers is refused as the dispatcher refuses it.
 struct Services {
     app: String,
-    granted: BTreeSet<String>,
     calls: Vec<(String, String)>,
 }
 
 impl Services {
-    fn new(app: &str, capabilities: &[&str]) -> Services {
+    fn new(app: &str) -> Services {
         Services {
             app: app.into(),
-            granted: capabilities.iter().map(|c| c.to_string()).collect(),
             calls: Vec::new(),
         }
     }
@@ -145,11 +144,8 @@ impl Services {
                 "a component cannot call wasm.*: its app's functions are already running it".into(),
             );
         }
-        if !self.granted.contains(family) {
-            return Err(format!(
-                "{} was not granted the {family} service, which {service} needs",
-                self.app
-            ));
+        if !matches!(family, "runtime" | "notes") {
+            return Err(format!("no service answers \"{family}\" on this device"));
         }
         let args: serde_json::Value = serde_json::from_str(args)
             .map_err(|e| format!("{service}: the arguments are not JSON: {e}"))?;
@@ -776,9 +772,9 @@ fn a_request_that_never_answers_ends_at_the_deadline() {
 }
 
 #[test]
-fn a_component_calls_its_apps_granted_host_services() {
+fn a_component_calls_its_apps_host_services_as_its_script_does() {
     let dir = storage();
-    let services = Services::new("dev.example.texttools", &["wasm", "runtime", "notes"]);
+    let services = Services::new("dev.example.texttools");
     let mut c = load_with(&dir, "host-services", "host_services.wasm", Some(services));
     let ok = |text: &str| Val::Result(Ok(Some(Box::new(s(text)))));
     assert_eq!(
@@ -789,10 +785,12 @@ fn a_component_calls_its_apps_granted_host_services() {
         call(&mut c, "call", &[s("notes.get"), s(r#"{"id": 1}"#)]),
         ok(r#"{"app":"dev.example.texttools","args":{"id":1}}"#)
     );
-    // What the host refuses reaches the component as its error.
+    // What the host refuses reaches the component as its error: the manifest
+    // declares no `mail`, and the call still reaches the dispatcher, which
+    // has no mail service here (OctoSense #452).
     assert_eq!(
         error(call(&mut c, "call", &[s("mail.list"), s("{}")])),
-        "dev.example.texttools was not granted the mail service, which mail.list needs"
+        "no service answers \"mail\" on this device"
     );
     assert_eq!(
         error(call(&mut c, "call", &[s("wasm.functions"), s("{}")])),

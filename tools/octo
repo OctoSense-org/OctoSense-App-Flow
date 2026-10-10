@@ -1336,8 +1336,8 @@ def cmd_wasm_call(args):
     if repo is None:
         die("no OctoSense checkout found: set $OCTOSENSE_REPO, or clone OctoSense-org/OctoSense beside this repository")
     if not (repo / WASM_CALL_EXAMPLE).is_file():
-        die(f"{repo} has no {WASM_CALL_EXAMPLE}: `tools/octo wasm call` needs an OctoSense checkout that carries "
-            "OctoSense #455 (its branch until it merges, then main)")
+        die(f"{repo} has no {WASM_CALL_EXAMPLE}: `tools/octo wasm call` needs OctoSense main at or after cb241350 "
+            "(OctoSense #455)")
     if not (repo / ".sources").is_dir():
         print(f"octo: note: {repo} has no .sources/ yet; if cargo cannot read the workspace, run "
               f"`python3 tools/setup.py` there first", file=sys.stderr)
