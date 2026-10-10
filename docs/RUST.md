@@ -44,7 +44,7 @@ one, and any phone.
 | Between calls | Starts fresh every call | Keeps its state |
 | The manifest | `wasm` | `wasm`, and `requires: ["wasm-components-v1"]`; `storage` for files; `net` for HTTP |
 | App Hub's gate (`hub check`) | Admits it from app contract 1.7 | `main` admits it under `requires: ["wasm-components-v1"]` (App Hub #186), with `wasi:http` and `octosense:host` imports (App Hub #188), and says what each component reaches. A `hub` older than #186 answers `app <id> needs a newer host: wasm-components-v1` at `hub stamp`; without the requirement, it finds `not a WebAssembly core module (magic and version 1)`. |
-| OctoSense `main` | Runs it on macOS, Linux and Android | Has run it since 10 October 2026 (OctoSense #451): the `wasm` service loads components from `fns/`, with HTTP to any host and `octosense:host`. Windows builds include the service since the same change; a run there is **unverified**. Android and OpenHarmony builds link the runtime, but no component has run on a phone yet (**unverified**). |
+| OctoSense `main` | Runs it on macOS, Linux and Android | Has run it since 10 October 2026 (OctoSense #451): the `wasm` service loads components from `fns/`, with HTTP to any host and `octosense:host`. Windows builds have included the service since the same change; a run there is **unverified**. Android and OpenHarmony builds link the runtime, but no component has run on a phone yet (**unverified**). |
 | `card-host` | Admits the app; every call answers `no service answers "wasm" on this device` | Has no `wasm` service either. Built from App Hub `main`, it admits the manifest, since it runs the same contract check as `hub` (**unverified** by a run here). |
 | Releases | Desktop 0.1.0-rc.2 runs it on macOS and Linux; no Home release does | None runs it. Desktop 0.1.0-rc.2 and Home 0.1.0-beta.2 refuse the manifest at install (`needs a newer host: wasm-components-v1`). |
 
@@ -322,11 +322,11 @@ An agent tool maps to a component's function as to a module's, with
 - `tools/octo wasm call <function> [JSON]` calls one function of the built
   component from the command line, through OctoSense's `wasm_call` example
   ([OctoSense #455](https://github.com/OctoSense-org/OctoSense/pull/455), in review; verified here against its head). It needs an
-  OctoSense checkout at or after that change (`OCTOSENSE_REPO`, or
-  `OctoSense` beside this repository), and its first run compiles the
-  runtime. Each call gets a fresh
-  instance, and `octosense:host` calls fail with `needs a shell`; the rest
-  runs as in the shell.
+  OctoSense checkout that carries that change, its branch until it merges and
+  then `main` (`OCTOSENSE_REPO`, or `OctoSense` beside this repository), and
+  its first run compiles the runtime. Each call gets a fresh instance, and
+  `octosense:host` calls fail with `needs a shell`; the rest runs as in the
+  shell.
 - `tools/octo run` starts the app in `card-host`, which has no `wasm`
   service, so every call answers `no service answers "wasm" on this device`.
   Use it for the layout and for what the app shows without its functions.
@@ -347,7 +347,7 @@ An agent tool maps to a component's function as to a module's, with
 
 The SDK's own tests build its examples and the template with plain cargo for
 `wasm32-wasip2`, load them in Wasmtime 49 with WASI 0.2 as ADR 0014's
-runtime does, and call every function. For phase 3 they link `wasi:http`
+runtime does, and call every function. For HTTP and host services they link `wasi:http`
 (`wasmtime-wasi-http` 49) and `octosense:host` as OctoSense's runtime does,
 with copies of its hooks: the `http-client` example sends requests to a local
 HTTP/1.1 server, by address and by name, with no grant, and one to a server
@@ -400,8 +400,8 @@ names App Hub `40abb23b`, the merge of App Hub #191: the App Hub revision
 OctoSense `main` carries, whose gate admits components with `wasi:http` and
 `octosense:host` imports (App Hub #186 and #188); it also includes App Hub
 #190, shared components in the catalog. It predates App Hub #189, so this
-`hub` prints no crate list and runs no advisory check; the reviewers' `hub`
-does.
+`hub` prints no crate list and runs no advisory check; a `hub` built from
+App Hub `main` at or after #189 does.
 
 ## What a component can use
 
@@ -658,8 +658,8 @@ component reaches the network with `octosense_component::http` instead
 
 `tools/octo wasm build` records in each component the crates it is built
 from, and the release workflow records the same list
-([7. Publish it](#7-publish-it)). App Hub's gate is to show the list to the
-reviewers and check it against the
+([7. Publish it](#7-publish-it)). App Hub's gate shows the list to the
+reviewers and checks it against the
 [RustSec advisory database](https://rustsec.org/). App Hub `main` does both
 since App Hub #189: `hub check` printed `is built from 6 crates: …` for the
 template here, and `hub check --advisory-db <dir>` checks the list against the
