@@ -407,7 +407,7 @@ host.request("wasm.resolve", {host: "localhost", port: 8080}, fn(r){
 
 套接字应用还需要支持套接字的 App Hub 准入工具。本检出版本的 publisher-toolchain
 固定到包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
-的 `caf37ca0`。旧准入工具和已经生成的发布工作流仍可能拒绝它。用
+的 `c317f787`。旧准入工具和已经生成的发布工作流仍可能拒绝它。用
 `tools/octo publish-github <app> --replace` 重新生成工作流；不要为了通过旧准入工具
 而移除兼容性要求。准入通过不等于已经有兼容的宿主发布版。
 

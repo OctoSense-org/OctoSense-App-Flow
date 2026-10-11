@@ -589,7 +589,7 @@ optional ABI 1 declaration to required and refuses conflicting ABI versions.
 
 Socket apps also need socket-capable App Hub admission. This checkout's
 publisher-toolchain pin includes [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
-at `caf37ca0`. Older gates and already-generated release workflows can still
+at `c317f787`. Older gates and already-generated release workflows can still
 refuse them. Regenerate the app's workflow with
 `tools/octo publish-github <app> --replace`; do not remove the compatibility
 requirement to make an old gate pass. Admission does not supply a compatible
