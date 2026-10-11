@@ -148,7 +148,8 @@ says who runs each one and when.
     provider, OctoSense #471) and the first with `charts.d3@1`.
     [Repo Radar](https://github.com/ymote/octosense-repo-radar) is the public-catalog proof of the component
     path: HTTPS to GitHub through the SDK, native charts, and the app's
-    state owned by the component.     Compatible release and actual app acceptance remain separate.
+    state owned by the component. Compatible release and actual app
+    acceptance remain separate.
     Preserve app/account scope, quotas, consent and native reviews.
   - `card-host` answers every call with
     `no service answers "wasm" on this device`, and refuses an app that

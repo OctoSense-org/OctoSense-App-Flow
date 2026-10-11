@@ -40,7 +40,7 @@ restart. Its sealed component is ordinary Rust over `serde`, `serde_json`,
 one request, with a 3 s request timeout under the 10 s call deadline, and
 parses at most 2 MiB of response, since the SDK buffers the body. It
 requires `wasm-components-v1` and `host-api-v1` with
-`host_api.required: {"charts.d3": 1}`, so RC4 refuses to install it; RC6 keeps all of this and adds sockets
+`host_api.required: {"charts.d3": 1}`, so RC4 refuses to install it. RC6 keeps all of this and adds sockets
 (above).
 
 **Historical RC4 baseline, unchanged.** [Desktop RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)
@@ -66,7 +66,7 @@ retain their original scope.
 | App Hub's gate (`hub check`) | Admits it from contract 1.7 | Current source admits supported components with `wasm-components-v1`; the 1.11 policy treats family declarations as disclosures. |
 | Current source (macOS, Windows, Linux, Android and OpenHarmony) | Included; OpenHarmony uses Pulley | Included, with phase 3 adapters and per-app shared-component loading; iOS excluded. Source inclusion does not establish device acceptance. |
 | `card-host` | Admits the app; calls answer `no service answers "wasm" on this device` | Also has no `wasm` service. Manifest admission does not make a component runnable there. |
-| Releases | Desktop RC4 and RC5 on macOS/Windows/Linux; also desktop RC2 on macOS/Linux and Home beta.2 | Desktop RC4 and RC5 include it on macOS/Windows/Linux; RC5 is the first whose component HTTPS works, the first with `charts.d3@1`, and the first with a component app installed from the public catalog (above). Home beta.2 has no components. |
+| Releases | Desktop RC4, RC5 and RC6 on macOS/Windows/Linux; also desktop RC2 on macOS/Linux and Home beta.2 | Desktop RC4, RC5 and RC6 include it on macOS/Windows/Linux; RC5 is the first whose component HTTPS works, the first with `charts.d3@1`, and the first with a component app installed from the public catalog (above); RC6 adds sockets. Home beta.2 has no components. |
 
 The recorded command examples below were run on macOS (Apple silicon)
 with Rust 1.97.1 before the declaration-policy correction, unless marked
@@ -314,7 +314,7 @@ always reads from the file itself.
 
 ### 5. Call it from the app
 
-RC4 and RC5 implement this component call path. The recorded SDK examples
+RC4, RC5 and RC6 implement this component call path. The recorded SDK examples
 below retain their own scope; separately test your exact app in the installed
 host.
 
@@ -353,8 +353,8 @@ An agent tool maps to a component's function as to a module's, with
   at the stamp: `hub: app dev.example.texttools needs a newer host: wasm-components-v1`.
   That output belongs to the older gate; see
   [What the gate checks](#what-the-gate-checks) for the current policy.
-- Desktop RC5 includes phases 2 and 3 with working HTTPS; RC4 runs
-  components whose functions make no request. Test your app in RC5,
+- Desktop RC5 and RC6 include phases 2 and 3 with working HTTPS; RC4 runs
+  components whose functions make no request. Test your app in RC6 (or RC5),
   with its real imports and public host-service calls; the SDK's local
   fixtures do not establish your app's behavior or provider authorization.
   `card-host` cannot drive the functions of an app whose manifest requires
