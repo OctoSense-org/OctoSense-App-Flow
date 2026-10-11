@@ -546,6 +546,14 @@ OctoSense socket wrapper to learn:
 | `std::net::UdpSocket` | Bind and exchange UDP datagrams |
 | `std::net::ToSocketAddrs` | Resolve a host and port into addresses |
 
+Use descriptive exported names such as `tcp_connect` or `fetch_message`.
+The SDK refuses an export named `connect`: wit-bindgen's bare world export
+collides with wasi-libc's C `connect` symbol, causing ordinary `std::net`
+calls to enter the wrong ABI and trap. Renaming the export fixes the verified
+collision; a private Rust helper named `connect` is safe. Direct WIT authors
+must use a different export name too. This is a naming issue, not a refusal
+of TCP or hostname lookup.
+
 The complete [socket-client example](../sdk/rust/examples/socket-client/src/lib.rs)
 exports `tcp_echo(address, message)`, `udp_echo(address, message)` and
 `resolve(host, port)`. The echo clients talk to your own echo server, bound

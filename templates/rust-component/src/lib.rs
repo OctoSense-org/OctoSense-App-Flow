@@ -16,6 +16,8 @@
 //! Ordinary `std::net` TCP/UDP/DNS requires a host advertising wasm.sockets@1,
 //! which released RC5 does not provide. `wasm build` adds that compatibility
 //! requirement automatically. Disclose file/network use with `storage`/`net`.
+//! Name socket exports `tcp_connect`, not `connect`: a bare `connect` export
+//! collides with wasi-libc and the SDK rejects it before linking.
 //!
 //! `octosense_component::host` calls the host services the app is granted.
 //! What a function may take and return is in OctoSense App Flow's

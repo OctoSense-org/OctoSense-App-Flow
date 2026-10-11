@@ -370,6 +370,12 @@ Rust 的 `wasm32-wasip2` 标准库提供导入，不需要学习另一套 OctoSe
 | `std::net::UdpSocket` | 绑定并交换 UDP 数据报 |
 | `std::net::ToSocketAddrs` | 把主机名和端口解析为地址 |
 
+使用描述性导出名，例如 `tcp_connect` 或 `fetch_message`。SDK 拒绝名为 `connect`
+的导出：wit-bindgen 的裸 world 导出会与 wasi-libc 的 C `connect` 符号冲突，使
+普通 `std::net` 调用进入错误的 ABI 并陷阱退出。重命名导出可修复已验证的冲突；
+私有 Rust 辅助函数可以叫 `connect`。直接编写 WIT 的开发者也必须使用不同的导出
+名。这是命名问题，不是拒绝 TCP 或主机名解析。
+
 完整的 [socket-client 示例](../sdk/rust/examples/socket-client/src/lib.rs) 导出
 `tcp_echo(address, message)`、`udp_echo(address, message)` 和 `resolve(host, port)`。
 回显客户端连接你自己的回显服务器，把消息限制为 1,024 字节，并在返回时释放套接字。

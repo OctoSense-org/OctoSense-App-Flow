@@ -39,6 +39,17 @@
 //! Maps, references, generics, `usize` and `async` are refused at compile
 //! time, with what to use instead.
 //!
+//! A world export named `connect` would replace wasi-libc's C socket symbol
+//! and corrupt `std::net` calls. Use `tcp_connect` or another prefixed name;
+//! the macro refuses the colliding export before linking:
+//!
+//! ```compile_fail
+//! #[octosense_component::export]
+//! mod tools {
+//!     pub fn connect(address: &str) -> String { address.into() }
+//! }
+//! ```
+//!
 //! The component runs in the OctoSense `wasm` service. It has clocks and
 //! randomness, and the app's bounded private folder as
 //! `/` through `std::fs`. Its stdout and stderr ([`log`]) become log lines.
