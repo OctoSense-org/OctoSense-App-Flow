@@ -68,17 +68,23 @@ App Flow 带着你（或编码 Agent）从一个想法（一段文字需求、�
 
 ### 下载兼容 Shell
 
-[**桌面版 0.1.0-rc.4 已发行**](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)，于 2026-10-10 发布，源码为 [`9266b008`](https://github.com/OctoSense-org/OctoSense/commit/9266b0083544d86bd7636543b5ff60c61b26460f)。它包含带 GitHub 证明的应用、公开 v2 签名目录、Host API v1、共享 Wasm 组件，以及能力声明仅用于披露用途的新策略。能力名称与 `network.hosts` 描述预计用途；遗漏声明不会拒绝公开 API。应用身份、私有存储、资源上限、账户和设备同意，以及经审核的工具访问仍受检查（[策略](docs/CAPABILITIES.zh-CN.md#当前源码策略与发布边界)）。RC2 引入的 OS API 仍按各自的平台限制提供（[宿主 API 能力族](docs/HOST-API-FAMILIES.zh-CN.md)）。
+**[桌面版 0.1.0-rc.6 已发布](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.6)**（2026-10-11），来自源码 [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)和[正式发布构建](https://github.com/OctoSense-org/OctoSense/actions/runs/38125407028)。
 
-| 平台 | 下载 |
+RC6 为 Rust/WASI 组件增加普通 TCP 流与监听器、UDP 数据报和 DNS，通过 `wasm.sockets@1` 提供（[Rust 套接字](docs/RUST.zh-CN.md#tcpudp-和-dns)）。它还增加原生 OctoSense Updates 应用，支持 Stable、Release candidate 和 Preview 通道、验证下载及明确的安装程序交接。RC5 没有更新器：须先手动安装一次 RC6，之后才能用它更新后续版本。更新器验证每份桌面校验和清单上的 GitHub 证明；这不等于 macOS Developer ID 签名或 Windows Authenticode 签名。
+
+| 平台 | RC6 下载 |
 | --- | --- |
-| macOS Apple 芯片 | [DMG](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_aarch64.dmg) 或 [应用 ZIP](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_macos_aarch64.app.zip) |
-| Windows x64 | [安装程序](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_x64-setup.exe) |
-| Linux x86_64 | [Debian 包](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_amd64.deb) 或 [AppImage](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_x86_64.AppImage) |
+| macOS Apple 芯片 | [DMG](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_aarch64.dmg) 或 [应用 ZIP](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_macos_aarch64.app.zip) |
+| Windows x64 | [安装程序](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_x64-setup.exe) |
+| Linux x86_64 | [Debian 包](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_amd64.deb) 或 [AppImage](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_x86_64.AppImage) |
 
-请用 [SHA256SUMS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/SHA256SUMS) 核对下载，并阅读发行说明中的平台要求。macOS 包只有链接器生成的临时签名，**没有 Developer ID 签名或公证**；Windows **没有发布者签名**。[发布工作流](https://github.com/OctoSense-org/OctoSense/actions/runs/38065627444)构建了这些安装包；[macOS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_macos-arm64.receipt.json)、[Windows](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_windows-x64.receipt.json) 和 [Linux](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_linux-x64.receipt.json) 收据记载源码及安装包身份。公开发布的九个附件均通过校验和验证。
+发行版附带 [SHA256SUMS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/SHA256SUMS)、它的 [GitHub 证明](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/SHA256SUMS.sigstore.json)，以及 [macOS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_macos-arm64.receipt.json)、[Windows](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_windows-x64.receipt.json) 和 [Linux](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_linux-x64.receipt.json) 安装包收据。8 个安装包及收据文件均通过校验和验证。RC6 原版更新器验证代码接受 [GitHub 签名](https://github.com/OctoSense-org/OctoSense/actions/runs/38137543497)，并拒绝篡改的校验和与错误发布标签。公开 Mac 下载通过更新器检查（RC/Preview：已是最新；Stable：尚无发行版），以及公开 App Hub 的 Repo Radar 安装、打开与重启保留状态检查。Linux 通过 6 项隔离启动检查；Windows 通过静态安装包检查。未测试 Windows 图形界面、原生安装程序交接或替换，以及完整应用功能。App Hub 的 Install 按钮仍位于权限审核内容下方。Mac 包没有 Developer ID 签名或公证；Windows 安装程序没有 Authenticode 签名。
 
-最终 Mac ZIP 与通过 **11/11** 项 App Hub/组件检查的候选包字节完全一致，覆盖安装、冷启动、组件调用及各应用独立状态/文件（[归档包验收与限制](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)）。该演练使用真实 GitHub 发布者证明和经管理员证明的私有演练签名目录；没有通过官方公开目录发布或安装这些组件。Windows/Linux 安装后的界面验收及真实提供商效果仍为**未验证**。Android Home 单独发行；此次桌面发布不更新 Home beta.2。自行构建 RC4 请按[固定源码的环境准备指南](https://github.com/OctoSense-org/OctoSense/blob/9266b0083544d86bd7636543b5ff60c61b26460f/README.zh-CN.md#环境准备)操作。
+Android Home 单独发行，此桌面发行版不会升级它。查看或自行构建 RC6 请按[固定源码的环境准备指南](https://github.com/OctoSense-org/OctoSense/blob/f9f6fea90b52182790cb2641fd0145c425af4d84/README.zh-CN.md#环境准备)操作。
+
+宿主继续包含带 GitHub 证明的应用、公开 v2 签名目录、Host API v1 和共享 Wasm 组件。能力名称与 `network.hosts` 描述预计用途；遗漏声明不会拒绝公开 API。所需 ABI/API 版本、应用身份、私有存储、资源上限、账户和设备同意及经审核的工具访问仍受检查（[策略](docs/CAPABILITIES.zh-CN.md#当前源码策略与发布边界)）。RC2 引入的 OS API 保留原有[平台限制](docs/HOST-API-FAMILIES.zh-CN.md)。
+
+**历史证据。** [RC4 发布说明](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4) 记录了九个校验通过的附件，以及在经管理员证明的私有演练目录上通过的 11/11 项 Mac 组件检查。这些结果仅适用于 RC4；上文 RC6 检查另行执行。
 
 这些示例使用 Mac：**App Hub → Search → 确切应用 ID → Get → Install → Open**。Install 前审阅权限；**Library** 提供重新打开和兼容更新。保留签名目录、来源及信任锚的默认设置，不需要开发者密钥或 OctoSense 云端账户。Beta.2 无法使用这些发布者证明或公开 v2 签名目录。
 
@@ -113,9 +119,9 @@ macOS 上的原生公开签名目录安装及 0.2.0 → 0.2.1 更新保留了本
 
 | 部分 | 状态 |
 | --- | --- |
-| 准入检查（`hub`） | App Hub `main`，应用契约 1.11.0（RC4 也固定使用此版本），校验以下用途声明：连接账户的 `auth`、`github`、`gmail` 和 `gcalendar` 能力、[Host API v1](docs/HOST-API-V1.zh-CN.md) 的各项声明、`wasm` 能力，以及 RC2 的 `files`、`audio` 和 `device_calendar`。 |
+| 准入检查（`hub`） | [固定的 App Hub `38635915`](https://github.com/OctoSense-org/OctoSense-App-Hub/tree/386359153ed6377b5f047bd9ed2767a6a2ac2bc7)，应用契约 **1.12.0**，校验以下用途声明：连接账户的 `auth`、`github`、`gmail` 和 `gcalendar` 能力、[Host API v1](docs/HOST-API-V1.zh-CN.md) 的各项声明、`wasm` 能力，以及 RC2 的 `files`、`audio` 和 `device_calendar`。 |
 | `card-host` | App Hub `main`。它运行单个应用包，除了用于发现宿主 API 的 `runtime`，不提供任何宿主服务。构建方法见[快速上手](#快速上手)。 |
-| Shell | [桌面 RC4 发行版，源码 `9266b008`](#下载兼容-shell)；各平台下载见该节。桌面端 Shell 和手机 Home 运行系统应用与商店应用；桌面端还支持已连接账户，并为应用 Agent 提供宿主服务工具。 |
+| Shell | [已发布的桌面 RC6](#下载兼容-shell)；各平台下载与验收见该节。桌面端 Shell 和手机 Home 运行系统应用与商店应用；桌面端还支持已连接账户，并为应用 Agent 提供宿主服务工具。 |
 | GitHub 发布 | 应用契约 1.8.0 / `publisher-github-v1`，无需开发者密钥。真实发布及公开目录 macOS 安装/更新检查已通过；见 [RC 下载状态](#下载兼容-shell)。隔离手机测试示例不代表仅声明 macOS 的应用可在手机运行。 |
 | 提交途径 | 在 OctoSense-App-Hub 开 issue，见 App Hub 的 [SUBMITTING.zh-CN.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/SUBMITTING.zh-CN.md)。 |
 | 在手机上安装自己的应用包 | 不支持。见[运行应用](#运行应用)。 |

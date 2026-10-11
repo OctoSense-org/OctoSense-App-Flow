@@ -139,8 +139,8 @@ says who runs each one and when.
     which also adds the required `wasm-components-v1` ABI and usage
     disclosures (`storage` for files, `net` for HTTP or sockets). Socket
     imports additionally require `host-api-v1` and
-    `host_api.required: {"wasm.sockets": 1}`. This needs a forthcoming host;
-    released RC5 does not provide sockets. Missing disclosures
+    `host_api.required: {"wasm.sockets": 1}`. [Published desktop RC6](README.md#compatible-shell-download)
+    provides this API; RC5 does not provide sockets. Missing disclosures
     must not become execution gates. OctoSense #453 merged component,
     HTTP and host-service integration; App Hub #186/#188 are also merged.
     Compatible release and actual app acceptance remain separate.
