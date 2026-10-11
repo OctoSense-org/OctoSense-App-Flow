@@ -31,14 +31,15 @@ MODULE_PREAMBLE = b"\0asm\x01\x00\x00\x00"
 
 # The packages a component may import (ADR 0014); the same list as App Hub's
 # ALLOWED_COMPONENT_IMPORTS. Files stay in the app's bounded private folder;
-# wasi:http reaches the network. Capability and destination declarations
+# wasi:http and wasi:sockets reach the network. Capability and destination declarations
 # disclose usage rather than authorize execution. octosense:host keeps the
 # app identity, actual service authorization and background-surface limits.
 # A package name is matched whole.
 ALLOWED_IMPORTS = ("wasi:cli/", "wasi:clocks/", "wasi:filesystem/", "wasi:http/", "wasi:io/", "wasi:random/",
-                   "octosense:host/")
+                   "wasi:sockets/", "octosense:host/")
 FILESYSTEM = "wasi:filesystem/"
 HTTP = "wasi:http/"
+SOCKETS = "wasi:sockets/"
 HOST_SERVICES = "octosense:host/"
 
 PRIMITIVES = {
@@ -621,6 +622,11 @@ def uses_http(imports):
     return any(name.startswith(HTTP) for name in imports)
 
 
+def uses_sockets(imports):
+    """TCP, UDP or DNS: requires the host's wasm.sockets@1 compatibility API."""
+    return any(name.startswith(SOCKETS) for name in imports)
+
+
 def uses_host_services(imports):
     """Whether it imports octosense:host: the public host services available to its app."""
     return any(name.startswith(HOST_SERVICES) for name in imports)
@@ -632,7 +638,7 @@ def reach(imports):
     network, but no other app"."""
     has = lambda prefix: any(name.startswith(prefix) for name in imports)  # noqa: E731
     files = uses_files(imports)
-    network = uses_http(imports)
+    network = uses_http(imports) or uses_sockets(imports)
     reaches = []
     if has("wasi:clocks/"):
         reaches.append("the clock")

@@ -164,9 +164,15 @@ tools/octo publish-github "$APP"
 
 `tools/octo new` 也会安装 `.github/workflows/publish-app.yml`。这条命令只写入这个文件，不会推送、创建 Release、提交或批准应用。除非显式加上 `--replace`，否则它拒绝覆盖内容不同的已有工作流。不需要开发者签名 secret；工作流使用 GitHub 的短期任务令牌和 OIDC 权限生成证明并创建 Release。
 
-更新 App Flow 不会改变已有生成工作流固定的 Hub 版本。需要更新时，先保留自己定制的工作流步骤，再显式运行 `tools/octo publish-github "$APP" --replace`，并在提交前审阅 `git -C "$APP" diff -- .github/workflows/publish-app.yml`。替换会重写整个生成文件，不会合并定制步骤；不要用它覆盖无关工作流。当前固定的 App Hub `7b36c8af` 支持 HTTP、宿主服务组件导入和共享组件，并采用声明仅用于披露的策略；旧的 `769e9ee3` 发布工具不支持这些行为。ABI 要求、应用包完整性和 GitHub 发布者证明检查仍然有效。
+更新 App Flow 不会改变已有生成工作流固定的 Hub 版本。需要更新时，先保留自己定制的工作流步骤，再显式运行 `tools/octo publish-github "$APP" --replace`，并在提交前审阅 `git -C "$APP" diff -- .github/workflows/publish-app.yml`。替换会重写整个生成文件，不会合并定制步骤；不要用它覆盖无关工作流。当前固定的 App Hub `c317f787` 支持 HTTP、宿主服务组件导入和共享组件，并采用声明仅用于披露的策略；旧的 `769e9ee3` 发布工具不支持这些行为。ABI 要求、应用包完整性和 GitHub 发布者证明检查仍然有效。
 
-CI 会构建[固定版本的发布工具](../tools/publisher-toolchain.json)，用真实 SDK 组件运行[原生 CLI 回归检查](../tools/check-publisher-toolchain.py)，验证结构准入和发布准备，以及缺失 ABI、不支持的导入和缺失发布证明时的拒绝。这个检查不会生成证明、发布应用或执行组件，也不代表 shell 或设备功能验收。
+这个固定版本还包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)：
+普通 WASI TCP/UDP/DNS 导入要求 `host-api-v1` 和
+`host_api.required: {"wasm.sockets": 1}`，`tools/octo wasm build` 会自动加入。
+RC5 能读取目录，但不能安装或运行这些套接字应用；仍需要实现该 API 的宿主
+（见 [Rust 套接字](RUST.zh-CN.md#tcpudp-和-dns)）。
+
+CI 会构建[固定版本的发布工具](../tools/publisher-toolchain.json)，用真实 SDK 组件运行[原生 CLI 回归检查](../tools/check-publisher-toolchain.py)，验证结构准入和发布准备，以及缺失 ABI、组件格式错误和缺失发布证明时的拒绝。这个检查不会生成证明、发布应用或执行组件，也不代表 shell 或设备功能验收。
 
 仓库中保留已测试、未签名的 `bundle/` 源码。在公开的应用仓库中审阅并 commit 工作流、源码、真实截图和 `.gitattributes`。为这个 commit 创建并推送一个**新**的 `v<manifest.version>` tag，例如清单版本为 `0.1.0` 时使用 `v0.1.0`。绝不要移动或重建已用于 Release 的 tag。
 

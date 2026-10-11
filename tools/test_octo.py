@@ -154,6 +154,7 @@ CORE_MODULE = (b'\0asm\x01\0\0\0\x01\x0c\x02\x60\x02\x7f\x7f\x01\x7f\x60\x02\x7f
                b'\x0a\x09\x01\x07\x00\x20\x00\x20\x01\x6a\x0b')
 
 ENV, FILES, TCP = 'wasi:cli/environment@0.2.9', 'wasi:filesystem/types@0.2.9', 'wasi:sockets/tcp@0.2.9'
+UDP, DNS = 'wasi:sockets/udp@0.2.9', 'wasi:sockets/ip-name-lookup@0.2.9'
 CLOCK, RANDOM = 'wasi:clocks/wall-clock@0.2.9', 'wasi:random/random@0.2.9'
 HTTP, HTTP_TYPES = 'wasi:http/outgoing-handler@0.2.9', 'wasi:http/types@0.2.9'
 HOST_SERVICES = 'octosense:host/services@0.1.0'
@@ -209,19 +210,24 @@ class WasmReader(unittest.TestCase):
                 {'name': 'ping', 'params': [], 'result': None},
             ],
         })
-        self.assertEqual(wasm_component.refused_imports(info['imports']), [TCP])
+        self.assertEqual(wasm_component.refused_imports(info['imports']), [])
         # A package name is matched whole, as App Hub's gate matches it.
         self.assertEqual(wasm_component.refused_imports(['wasi:clocksmith/x', 'my:pkg/host']), ['wasi:clocksmith/x', 'my:pkg/host'])
 
-    def test_phase_3_admits_http_and_host_services_and_nothing_else(self):
+    def test_import_packages_include_sockets_but_not_similarly_named_packages(self):
         imports = ['wasi:io/poll@0.2.9', 'wasi:sockets/network@0.2.9', HTTP_TYPES, 'my:pkg/host',
                    HOST_SERVICES, 'octosense:hostile/x']
         self.assertEqual(wasm_component.refused_imports(imports),
-                         ['wasi:sockets/network@0.2.9', 'my:pkg/host', 'octosense:hostile/x'])
+                         ['my:pkg/host', 'octosense:hostile/x'])
         self.assertTrue(wasm_component.uses_http(imports))
         self.assertTrue(wasm_component.uses_host_services(imports))
         self.assertFalse(wasm_component.uses_http([ENV, FILES, 'wasi:httpx/x']))
         self.assertFalse(wasm_component.uses_host_services([ENV, 'octosense:hostile/x']))
+        for imported in (TCP, UDP, DNS):
+            self.assertTrue(wasm_component.uses_sockets([imported]))
+            self.assertEqual(wasm_component.refused_imports([imported]), [])
+        self.assertFalse(wasm_component.uses_sockets(['wasi:sockets-extra/tcp']))
+        self.assertEqual(wasm_component.refused_imports(['wasi:sockets-extra/tcp']), ['wasi:sockets-extra/tcp'])
 
     def test_the_reach_line_is_app_hub_s(self):
         # App Hub's `ComponentInfo::reach` tests, word for word.
@@ -239,6 +245,8 @@ class WasmReader(unittest.TestCase):
                          "its app's host services, but no other app")
         # Any wasi:http interface is the network, even types alone.
         self.assertEqual(reach([HTTP_TYPES]), 'the network, but no files or other app')
+        for imported in (TCP, UDP, DNS):
+            self.assertEqual(reach([imported]), 'the network, but no files or other app')
 
     def test_a_core_module_s_imports_and_exports(self):
         self.assertEqual(wasm_component.describe(CORE_MODULE), {
@@ -287,6 +295,15 @@ class WasmReader(unittest.TestCase):
             ('call', [['service', 'string'], ['args', 'string']], 'result<string, string>'),
             ('host-apis', [], 'result<string, string>'),
         ])
+
+    def test_built_std_net_example_has_socket_imports_and_typed_exports(self):
+        found = [d / 'socket_client.wasm' for d in SDK_WASM if (d / 'socket_client.wasm').is_file()]
+        if not found: self.skipTest('build sdk/rust first: cargo test --locked --workspace')
+        info = wasm_component.describe(found[0].read_bytes())
+        self.assertTrue(wasm_component.uses_sockets(info['imports']))
+        self.assertFalse(wasm_component.uses_http(info['imports']))
+        self.assertEqual(wasm_component.refused_imports(info['imports']), [])
+        self.assertEqual([export['name'] for export in info['exports']], ['resolve', 'tcp-echo', 'udp-echo'])
 
 
 class WasmCommands(unittest.TestCase):
@@ -441,11 +458,9 @@ class WasmCommands(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             app = self.app(temp)
             before = (app / 'bundle/manifest.json').read_text()
-            code, _, err = self.build(app, component(ENV, TCP))
+            code, _, err = self.build(app, component(ENV, '__wbindgen_placeholder__.fetch'))
             self.assertEqual(code, 1)
-            self.assertIn(TCP, err)
-            self.assertIn('a component has none. It reaches the network over HTTP through wasi:http, '
-                          'with octosense_component::http; disclose that use with `net`.', err)
+            self.assertIn('JavaScript bindings (wasm-bindgen)', err)
             self.assertNotIn('network.hosts', err)
             self.assertFalse((app / 'bundle/fns').exists())
             self.assertEqual((app / 'bundle/manifest.json').read_text(), before)
@@ -454,6 +469,47 @@ class WasmCommands(unittest.TestCase):
             code, _, err = self.build(app, component(ENV, 'octosense:hostile/x'))
             self.assertEqual(code, 1)
             self.assertIn('octosense:hostile/x:\n    not an interface any host gives a component', err)
+
+    def test_build_sockets_requires_a_compatible_host_and_discloses_network(self):
+        for imported in (TCP, UDP, DNS):
+            with self.subTest(imported=imported), tempfile.TemporaryDirectory() as temp:
+                app = self.app(temp, capabilities=(), hosts=['example.org'])
+                code, out, err = self.build(app, component(CLOCK, imported))
+                self.assertEqual(code, 0, out + err)
+                manifest = json.loads((app / 'bundle/manifest.json').read_text())
+                self.assertEqual(manifest['requires'], ['wasm-components-v1', 'host-api-v1'])
+                self.assertEqual(manifest['host_api'], {'required': {'wasm.sockets': 1}})
+                self.assertEqual(manifest['capabilities'], ['wasm', 'net'])
+                self.assertEqual(manifest['network'], {'hosts': ['example.org']})
+                self.assertIn('requires a forthcoming socket-capable host, not RC5', out)
+                code, out, err = self.build_again(app, component(CLOCK, imported))
+                self.assertEqual(code, 0, out + err)
+                self.assertNotIn('bundle/manifest.json:', out)
+
+    def test_socket_requirements_preserve_other_apis_and_promote_optional_support(self):
+        manifest = {'requires': ['host-api-v1'], 'host_api': {
+            'required': {'files.read': 1}, 'optional': {'wasm.sockets': 1, 'camera.capture': 1}}}
+        octo.component_manifest_changes(manifest, None, sockets='network-tools')
+        self.assertEqual(manifest['host_api'], {
+            'required': {'files.read': 1, 'wasm.sockets': 1}, 'optional': {'camera.capture': 1}})
+        self.assertEqual(manifest['requires'], ['host-api-v1', 'wasm-components-v1'])
+        null = {'host_api': None}
+        octo.component_manifest_changes(null, None, sockets='network-tools')
+        self.assertEqual(null['host_api'], {'required': {'wasm.sockets': 1}})
+
+    def test_conflicting_socket_abi_refuses_before_changing_the_bundle(self):
+        with tempfile.TemporaryDirectory() as temp:
+            app = self.app(temp)
+            path = app / 'bundle/manifest.json'
+            manifest = json.loads(path.read_text())
+            manifest['host_api'] = {'required': {'wasm.sockets': 2}}
+            path.write_text(json.dumps(manifest))
+            before = path.read_bytes()
+            code, _, err = self.build(app, component(TCP))
+            self.assertEqual(code, 1)
+            self.assertIn('wasm.sockets imports need ABI 1', err)
+            self.assertEqual(path.read_bytes(), before)
+            self.assertFalse((app / 'bundle/fns').exists())
 
     def test_build_adds_net_for_http_and_never_a_host(self):
         # network.hosts is a declaration shown at install, not a limit
@@ -550,6 +606,27 @@ class WasmCommands(unittest.TestCase):
                 # System apps' engine services are not a store app's.
                 self.assertNotRegex(hint, r'\b(photo|pdf|word|llm)\.')
 
+    def test_doctor_warns_about_socket_crates_instead_of_refusing_their_names(self):
+        crate = Path('/apps/network-tools')
+        meta = {
+            'packages': [
+                {'id': 'root', 'name': 'network-tools', 'version': '0.1.0',
+                 'manifest_path': str(crate / 'Cargo.toml'), 'targets': [{'kind': ['cdylib']}],
+                 'dependencies': []},
+                {'id': 'network', 'name': 'ureq', 'version': '3.0.0'},
+            ],
+            'resolve': {'nodes': [
+                {'id': 'root', 'deps': [{'pkg': 'network', 'dep_kinds': [{'kind': None}]}]},
+                {'id': 'network', 'deps': []},
+            ]},
+        }
+        done = subprocess.CompletedProcess([], 0, stdout=json.dumps(meta), stderr='')
+        with patch.object(octo.subprocess, 'run', return_value=done):
+            findings = octo.dependency_findings('cargo', crate)
+        self.assertFalse(any(level == 'fail' for level, _ in findings))
+        self.assertTrue(any(level == 'warn' and 'ureq 3.0.0' in message
+                            and 'wasm.sockets@1 (not RC5)' in message for level, message in findings))
+
     def test_info_reads_a_file_without_a_hub(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'tools.wasm'
@@ -559,7 +636,9 @@ class WasmCommands(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertIn("read by octo's own reader", out)
                 self.assertIn('wasm.count_words(text: string) -> record { words: u32 }', out)
-                self.assertIn(f'{TCP}   (refused)', out)
+                self.assertNotIn(f'{TCP}   (refused)', out)
+                self.assertIn('host_api.required {"wasm.sockets": 1}', out)
+                self.assertIn('not RC5', out)
                 self.assertIn('crates: not recorded;', out)
                 code, out, _ = self.octo('wasm', 'info', str(path), '--json')
                 self.assertEqual(json.loads(out), dict(wasm_component.describe(component(ENV, TCP)), crates=None))
