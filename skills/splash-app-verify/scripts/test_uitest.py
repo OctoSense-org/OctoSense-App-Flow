@@ -8,6 +8,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import uitest  # noqa: E402
 
+# Any executable file stands in for card-host where the host itself is faked;
+# this one exists on every system the tests run on.
+FAKE_CARD_HOST = sys.executable
+
+
+def link_or_skip(test, link, target):
+    """Make a symbolic link, or skip: Windows allows them only with a privilege."""
+    try:
+        link.symlink_to(target, target_is_directory=Path(target).is_dir())
+    except (OSError, NotImplementedError) as e:
+        test.skipTest(f"this system cannot make symbolic links here: {e}")
+
 WIDGETS = [
     {"i": "title", "ty": "Label", "r": [16, 16, 380, 30], "t": "Titled Notes"},
     {"i": "entry", "ty": "TextInput", "r": [16, 60, 300, 40], "t": "", "value": "Call the plumber"},
@@ -93,25 +105,25 @@ class Fixtures(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").write_text("let x = 1\n")
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
             (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": ["model"],
-                                                              "integrity": {"bundle_blake3": "", "signature": {"k": 1}}}))
+                                                              "integrity": {"bundle_blake3": "", "signature": {"k": 1}}}), encoding="utf-8")
             work = Path(t) / "work"
             work.mkdir()
             copy, lines = uitest.prepare_copy(bundle, work, {"host": {}}, "n0nce")
-            self.assertEqual((bundle / "main.splash").read_text(), "let x = 1\n")
-            self.assertTrue((copy / "main.splash").read_text().endswith("let x = 1\n"))
-            self.assertIn("UITEST_READY_n0nce", (copy / "main.splash").read_text())
+            self.assertEqual((bundle / "main.splash").read_text(encoding="utf-8"), "let x = 1\n")
+            self.assertTrue((copy / "main.splash").read_text(encoding="utf-8").endswith("let x = 1\n"))
+            self.assertIn("UITEST_READY_n0nce", (copy / "main.splash").read_text(encoding="utf-8"))
             self.assertGreater(lines, 10)
-            manifest = json.loads((copy / "manifest.json").read_text())
+            manifest = json.loads((copy / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["capabilities"], ["model"])     # nothing added: no storage for the runner
             self.assertNotIn("signature", manifest["integrity"])
             work2 = Path(t) / "w2"
             work2.mkdir()
             copy2, lines2 = uitest.prepare_copy(bundle, work2, {"fake_host": False})
             self.assertEqual(lines2, 0)
-            self.assertEqual((copy2 / "main.splash").read_text(), "let x = 1\n")
-            (bundle / "manifest.json").write_text(json.dumps({"id": "../escape", "capabilities": []}))
+            self.assertEqual((copy2 / "main.splash").read_text(encoding="utf-8"), "let x = 1\n")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "../escape", "capabilities": []}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.prepare_copy(bundle, Path(t) / "w3", {})
 
@@ -225,7 +237,7 @@ class Checks(unittest.TestCase):
     def test_enabled_count_calls_files(self):
         with tempfile.TemporaryDirectory() as t:
             f = Path(t) / "notes.json"
-            f.write_text('{"notes":["a"]}')
+            f.write_text('{"notes":["a"]}', encoding="utf-8")
             app = FakeApp(WIDGETS, calls=[{"service": "model.complete", "args": {"input": {"note": "a"}}}],
                           files={"notes.json": f})
             uitest.check_expectation(app, {"enabled": ["Keep"], "disabled": ["Suggest a title"],
@@ -263,7 +275,7 @@ class Scenarios(unittest.TestCase):
     def test_broken_scenario_is_reported(self):
         for body in ('{"name": "no steps"}', '{"steps": [{"clik": "Keep"}]}', '{"steps": [{"run": "_missing.json"}]}'):
             with tempfile.TemporaryDirectory() as t:
-                (Path(t) / "x.json").write_text(body)
+                (Path(t) / "x.json").write_text(body, encoding="utf-8")
                 with self.assertRaises(uitest.ScenarioError):
                     uitest.load_scenarios(t)
 
@@ -274,12 +286,12 @@ class Scenarios(unittest.TestCase):
                 "sizes": ["412x892", "954x448"],
                 "host": {"a.read": {"data": {"rows": [1]}}, "a.info": {"data": {"id": "r"}}},
                 "storage": {"s.json": "{}"},
-                "steps": [{"click": "Load"}, {"wait": {"text": ["1 row"]}}]}))
+                "steps": [{"click": "Load"}, {"wait": {"text": ["1 row"]}}]}), encoding="utf-8")
             (d / "02-x.json").write_text(json.dumps({
                 "use": "_room.json",
                 "host": {"a.read": {"error": "expired"}},
-                "steps": [{"run": "_room.json"}, {"expect": {"text": ["expired"]}, "note": "why"}]}))
-            (d / "01-plain.json").write_text('{"steps": [{"sleep": 0}]}')
+                "steps": [{"run": "_room.json"}, {"expect": {"text": ["expired"]}, "note": "why"}]}), encoding="utf-8")
+            (d / "01-plain.json").write_text('{"steps": [{"sleep": 0}]}', encoding="utf-8")
             scenarios = uitest.load_scenarios(d)
             self.assertEqual([f.name for f, _ in scenarios], ["01-plain.json", "02-x.json"])
             sc = scenarios[1][1]
@@ -337,28 +349,28 @@ class Safety(unittest.TestCase):
             # Refused when the scenario loads, before anything is written.
             d = Path(t) / "tests"
             d.mkdir()
-            (d / "01.json").write_text(json.dumps({"storage": {"../../x": "1"}, "steps": [{"sleep": 0}]}))
+            (d / "01.json").write_text(json.dumps({"storage": {"../../x": "1"}, "steps": [{"sleep": 0}]}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.load_scenarios(d)
-            (d / "01.json").write_text(json.dumps({"steps": [{"wait": {"files": [{"name": "/etc/passwd"}]}}]}))
+            (d / "01.json").write_text(json.dumps({"steps": [{"wait": {"files": [{"name": "/etc/passwd"}]}}]}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.load_scenarios(d)
 
     def test_a_link_in_the_bundle_is_refused_before_anything_is_written(self):
         with tempfile.TemporaryDirectory() as t:
             outside = Path(t) / "outside-source.splash"
-            outside.write_text("let x = 1\n")
+            outside.write_text("let x = 1\n", encoding="utf-8")
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").symlink_to(outside)
-            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}))
+            link_or_skip(self, bundle / "main.splash", outside)
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.prepare_copy(bundle, Path(t) / "work", {"host": {}}, "n0nce")
-            self.assertEqual(outside.read_text(), "let x = 1\n")        # untouched
+            self.assertEqual(outside.read_text(encoding="utf-8"), "let x = 1\n")        # untouched
             (bundle / "main.splash").unlink()
-            (bundle / "main.splash").write_text("let x = 1\n")
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
             (bundle / "assets").mkdir()
-            (bundle / "assets" / "up").symlink_to(Path(t))               # a directory link counts too
+            link_or_skip(self, bundle / "assets" / "up", Path(t))       # a directory link counts too
             with self.assertRaises(uitest.ScenarioError):
                 uitest.prepare_copy(bundle, Path(t) / "work2", {"host": {}}, "n0nce")
 
@@ -382,7 +394,7 @@ class Safety(unittest.TestCase):
         ]
         for body in bad:
             with tempfile.TemporaryDirectory() as t:
-                (Path(t) / "x.json").write_text(json.dumps(body))
+                (Path(t) / "x.json").write_text(json.dumps(body), encoding="utf-8")
                 with self.assertRaises(uitest.ScenarioError, msg=json.dumps(body)):
                     uitest.load_scenarios(t)
 
@@ -402,20 +414,20 @@ class Safety(unittest.TestCase):
         ]
         for step in bad_steps:
             with tempfile.TemporaryDirectory() as t:
-                (Path(t) / "x.json").write_text(json.dumps({"steps": [step]}))
+                (Path(t) / "x.json").write_text(json.dumps({"steps": [step]}), encoding="utf-8")
                 with self.assertRaises(uitest.ScenarioError, msg=json.dumps(step)):
                     uitest.load_scenarios(t)
         with tempfile.TemporaryDirectory() as t:
-            (Path(t) / "x.json").write_text(json.dumps({"storge": {}, "steps": [{"sleep": 0}]}))
+            (Path(t) / "x.json").write_text(json.dumps({"storge": {}, "steps": [{"sleep": 0}]}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.load_scenarios(t)
             (Path(t) / "x.json").write_text(json.dumps({"fake_host": False,
-                                                        "steps": [{"expect": {"calls": [{"service": "a.b"}]}}]}))
+                                                        "steps": [{"expect": {"calls": [{"service": "a.b"}]}}]}), encoding="utf-8")
             with self.assertRaises(uitest.ScenarioError):
                 uitest.load_scenarios(t)
             (Path(t) / "x.json").write_text(json.dumps({"host_profile": "rinx", "steps": [
                 {"click": {"text": "Use", "after": {"contains": "B"}, "nth": 0}, "note": "why"},
-                {"wait": {"calls": [{"service": "a.b", "count": 0, "excludes": "x"}]}, "timeout": 3}]}))
+                {"wait": {"calls": [{"service": "a.b", "count": 0, "excludes": "x"}]}, "timeout": 3}]}), encoding="utf-8")
             self.assertEqual(uitest.load_scenarios(t)[0][1]["host_profile"], "rinx")
 
     def test_malformed_files_are_scenario_errors_never_crashes(self):
@@ -488,8 +500,8 @@ class Safety(unittest.TestCase):
         for text in cases:
             with tempfile.TemporaryDirectory() as t:
                 for name, body in parts.items():
-                    (Path(t) / name).write_text(body)
-                (Path(t) / "x.json").write_text(text)
+                    (Path(t) / name).write_text(body, encoding="utf-8")
+                (Path(t) / "x.json").write_text(text, encoding="utf-8")
                 with self.assertRaises(uitest.ScenarioError, msg=text[:120]):
                     uitest.load_scenarios(Path(t) / "x.json")
 
@@ -514,13 +526,13 @@ class Safety(unittest.TestCase):
                 "host_profile": "rinx", "sizes": ["412x892"], "note": "shared",
                 "host": {"a.b": [{"data": None}, {"error": "", "delay": 0}, {"never": True, "delay": 600}],
                          "*": {"error": "down", "note": "everything else"}},
-                "storage": {"notes/a.json": {"x": 1}}}))
-            (Path(t) / "_load.json").write_text(json.dumps({"description": "load", "steps": [{"sleep": 0}]}))
+                "storage": {"notes/a.json": {"x": 1}}}), encoding="utf-8")
+            (Path(t) / "_load.json").write_text(json.dumps({"description": "load", "steps": [{"sleep": 0}]}), encoding="utf-8")
             (Path(t) / "x.json").write_text(json.dumps({
                 "use": ["_room.json"], "startup_timeout": 600,
                 "steps": [{"run": "_load.json", "note": "load"}, {"sleep": 600, "allow_runtime_errors": True},
                           {"wait": {"text": ["x"]}, "timeout": 0},
-                          {"scroll_to": "x", "max": 1000}]}))
+                          {"scroll_to": "x", "max": 1000}]}), encoding="utf-8")
             sc = uitest.load_scenarios(Path(t) / "x.json")[0][1]
         self.assertEqual(sc["host_profile"], "rinx")
         self.assertEqual(len(sc["steps"]), 4)
@@ -575,7 +587,7 @@ class Safety(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             jail = Path(t) / "data" / "app"
             (jail / "backup" / "state").mkdir(parents=True)
-            (jail / "backup" / "state" / "notes.json").write_text("kept")
+            (jail / "backup" / "state" / "notes.json").write_text("kept", encoding="utf-8")
             app = uitest.App.__new__(uitest.App)
             app.jail = jail
             app.snap = lambda: []
@@ -584,11 +596,11 @@ class Safety(unittest.TestCase):
                 uitest.check_expectation(app, {"files": [{"name": "state/notes.json", "contains": ["kept"]}]},
                                          [0, 0, 412, 892])
             (jail / "state").mkdir()
-            (jail / "state" / "notes.json").write_text("kept")
+            (jail / "state" / "notes.json").write_text("kept", encoding="utf-8")
             self.assertEqual(app.find_file("state/notes.json"), jail / "state" / "notes.json")
             outside = Path(t) / "outside.txt"
-            outside.write_text("secret")
-            (jail / "link.txt").symlink_to(outside)
+            outside.write_text("secret", encoding="utf-8")
+            link_or_skip(self, jail / "link.txt", outside)
             self.assertIsNone(app.find_file("link.txt"))           # a link is not the app's own file
             self.assertNotIn(jail / "link.txt", uitest.app_files(jail))
 
@@ -608,7 +620,7 @@ class Housekeeping(unittest.TestCase):
 
         class Host:
             def __init__(self, card_host, bundle, data_dir, size, log_path, env, jail=None, nonce=None):
-                Path(log_path).write_text("")
+                Path(log_path).write_text("", encoding="utf-8")
                 self.line_offset = 0
 
             def wait_ready(self, timeout):
@@ -629,12 +641,12 @@ class Housekeeping(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").write_text("let x = 1\n")
-            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}))
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
             real, uitest.App = uitest.App, Host
             before = set(Path(tempfile.gettempdir()).glob("uitest-*"))
             try:
-                r = uitest.run_one("/bin/true", bundle, Path(t) / "01.json", {"steps": [], "storage": {"n.json": "{}"}},
+                r = uitest.run_one(FAKE_CARD_HOST, bundle, Path(t) / "01.json", {"steps": [], "storage": {"n.json": "{}"}},
                                    "412x892", Path(t) / "out", type("D", (), {"env": {}})())
             finally:
                 uitest.App = real
@@ -650,15 +662,15 @@ class Housekeeping(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").write_text("let x = 1\n")
-            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}))
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
             scenario = Path(t) / "case.json"
-            scenario.write_text('{"steps": [{"sleep": 0}]}')
+            scenario.write_text('{"steps": [{"sleep": 0}]}', encoding="utf-8")
             out = Path(t) / "out"
 
             class Host:
                 def __init__(self, *a, **k):
-                    Path(a[4]).write_text("")
+                    Path(a[4]).write_text("", encoding="utf-8")
                     self.line_offset = 0
                     self.proc = None
 
@@ -674,17 +686,17 @@ class Housekeeping(unittest.TestCase):
                 def __exit__(self, *a): pass
 
             real = (uitest.App, uitest.Display, uitest.find_card_host)
-            uitest.App, uitest.Display, uitest.find_card_host = Host, NoDisplay, lambda *a, **k: "/bin/true"
+            uitest.App, uitest.Display, uitest.find_card_host = Host, NoDisplay, lambda *a, **k: FAKE_CARD_HOST
             try:
                 argv = ["run", str(bundle), str(scenario), "--out", str(out)]
                 self.assertEqual(uitest.main(argv), 0)
-                first = json.loads((out / "summary.json").read_text())
+                first = json.loads((out / "summary.json").read_text(encoding="utf-8"))
                 self.assertEqual((first["status"], first["passed"]), ("passed", 1))
-                scenario.write_text('{"host": {"a.b": {"dta": 1}}, "steps": []}')
+                scenario.write_text('{"host": {"a.b": {"dta": 1}}, "steps": []}', encoding="utf-8")
                 self.assertEqual(uitest.main(argv), 2)
             finally:
                 uitest.App, uitest.Display, uitest.find_card_host = real
-            second = json.loads((out / "summary.json").read_text())
+            second = json.loads((out / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(second["status"], "aborted")
             self.assertNotEqual(second["run_id"], first["run_id"])
             self.assertEqual(second["passed"], 0)
@@ -694,7 +706,7 @@ class Housekeeping(unittest.TestCase):
     def test_a_host_that_fails_to_close_still_leaves_a_result(self):
         class Host:
             def __init__(self, *a, **k):
-                Path(a[4]).write_text("")
+                Path(a[4]).write_text("", encoding="utf-8")
                 self.line_offset = 0
 
             def wait_ready(self, timeout): pass
@@ -708,12 +720,12 @@ class Housekeeping(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").write_text("let x = 1\n")
-            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}))
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
             real, uitest.App = uitest.App, Host
             before = set(Path(tempfile.gettempdir()).glob("uitest-*"))
             try:
-                r = uitest.run_one("/bin/true", bundle, Path(t) / "01.json", {"steps": []}, "412x892",
+                r = uitest.run_one(FAKE_CARD_HOST, bundle, Path(t) / "01.json", {"steps": []}, "412x892",
                                    Path(t) / "out", type("D", (), {"env": {}})())
             finally:
                 uitest.App = real
@@ -726,9 +738,9 @@ class Housekeeping(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             bundle = Path(t) / "bundle"
             bundle.mkdir()
-            (bundle / "main.splash").write_text("let x = 1\n")
-            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}))
-            (Path(t) / "case.json").write_text('{"steps": [{"sleep": 0}]}')
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
+            (Path(t) / "case.json").write_text('{"steps": [{"sleep": 0}]}', encoding="utf-8")
 
             class NoDisplay:
                 def __enter__(self):
@@ -736,20 +748,105 @@ class Housekeeping(unittest.TestCase):
                 def __exit__(self, *a): pass
 
             real = (uitest.Display, uitest.find_card_host)
-            uitest.Display, uitest.find_card_host = NoDisplay, lambda *a, **k: "/bin/true"
+            uitest.Display, uitest.find_card_host = NoDisplay, lambda *a, **k: FAKE_CARD_HOST
             try:
                 code = uitest.main(["run", str(bundle), str(Path(t) / "case.json"), "--out", str(Path(t) / "out")])
             finally:
                 uitest.Display, uitest.find_card_host = real
-            summary = json.loads((Path(t) / "out" / "summary.json").read_text())
+            summary = json.loads((Path(t) / "out" / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(code, 2)
             self.assertEqual(summary["status"], "environment_error")
             self.assertIn("finished", summary)
 
+    def test_every_text_file_the_runner_touches_names_its_encoding(self):
+        # Windows reads and writes text as cp1252 unless told otherwise, and the
+        # results carry the scenarios' own (often Chinese) names.
+        import ast
+        tree = ast.parse((Path(__file__).resolve().parent / "uitest.py").read_text(encoding="utf-8"))
+        unnamed = [n.lineno for n in ast.walk(tree)
+                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+                   and n.func.attr in ("read_text", "write_text")
+                   and not any(k.arg == "encoding" for k in n.keywords)]
+        self.assertEqual(unnamed, [], "uitest.py lines that read or write text in the platform's encoding")
+
+    def test_results_are_utf8_and_a_narrow_console_does_not_stop_the_run(self):
+        import io
+        with tempfile.TemporaryDirectory() as t:
+            bundle = Path(t) / "bundle"
+            bundle.mkdir()
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
+            scenario = Path(t) / "case.json"
+            scenario.write_text(json.dumps({"name": "首屏：载入群聊", "steps": [{"sleep": 0}]}), encoding="utf-8")
+            out = Path(t) / "out"
+
+            class Host:
+                def __init__(self, *a, **k):
+                    Path(a[4]).write_text("", encoding="utf-8")
+                    self.line_offset = 0
+                def wait_ready(self, timeout): pass
+                def new_runtime_errors(self): return []
+                def calls(self, final=False): return [{"seq": 1, "service": "a.b", "args": {"text": "你好"}}]
+                def peak_rss_mb(self): return None
+                def close(self): pass
+
+            class NoDisplay:
+                env = {}
+                def __enter__(self): return self
+                def __exit__(self, *a): pass
+
+            console = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")   # a Windows console's code page
+            real = (uitest.App, uitest.Display, uitest.find_card_host, sys.stdout)
+            uitest.App, uitest.Display, uitest.find_card_host = Host, NoDisplay, lambda *a, **k: FAKE_CARD_HOST
+            sys.stdout = console
+            try:
+                code = uitest.main(["run", str(bundle), str(scenario), "--out", str(out)])
+            finally:
+                uitest.App, uitest.Display, uitest.find_card_host, sys.stdout = real
+            self.assertEqual(code, 0)
+            summary = json.loads((out / "summary.json").read_bytes().decode("utf-8"))
+            self.assertEqual(summary["results"][0]["scenario"], "首屏：载入群聊")
+            console.flush()
+            self.assertIn(b"\\u9996", console.buffer.getvalue())   # shown escaped, not a crash
+
+    def test_an_unreadable_card_host_still_ends_the_summary(self):
+        with tempfile.TemporaryDirectory() as t:
+            bundle = Path(t) / "bundle"
+            bundle.mkdir()
+            (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+            (Path(t) / "case.json").write_text('{"steps": [{"sleep": 0}]}', encoding="utf-8")
+            real = uitest.find_card_host
+            uitest.find_card_host = lambda *a, **k: t      # a directory: hashing it fails
+            try:
+                code = uitest.main(["run", str(bundle), str(Path(t) / "case.json"), "--out", str(Path(t) / "out")])
+            finally:
+                uitest.find_card_host = real
+            summary = json.loads((Path(t) / "out" / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual((code, summary["status"]), (2, "aborted"))
+            self.assertIn("finished", summary)
+
+    def test_card_host_is_found_by_its_windows_name(self):
+        with tempfile.TemporaryDirectory() as t:
+            exe = Path(t) / "target" / "release" / "card-host.exe"
+            exe.parent.mkdir(parents=True)
+            exe.write_text("", encoding="utf-8")
+            exe.chmod(0o755)
+            old_names, old_env = uitest.CARD_HOST_NAMES, dict(uitest.os.environ)
+            try:
+                uitest.CARD_HOST_NAMES = ("card-host.exe", "card-host")
+                uitest.os.environ.update(OCTOSENSE_APP_HUB=t, XDG_CONFIG_HOME=t, PATH=str(Path(t) / "none"))
+                uitest.os.environ.pop("OCTO_CARD_HOST", None)
+                uitest.os.environ.pop("CARGO_TARGET_DIR", None)
+                self.assertEqual(uitest.find_card_host(None), str(exe.resolve()))
+            finally:
+                uitest.CARD_HOST_NAMES = old_names
+                uitest.os.environ.clear()
+                uitest.os.environ.update(old_env)
+
     def test_setup_records_card_host_for_later_shells(self):
         with tempfile.TemporaryDirectory() as t:
             exe = Path(t) / "card-host"
-            exe.write_text("#!/bin/sh\n")
+            exe.write_text("#!/bin/sh\n", encoding="utf-8")
             exe.chmod(0o755)
             old = {k: uitest.os.environ.get(k) for k in ("XDG_CONFIG_HOME", "OCTO_CARD_HOST", "OCTOSENSE_APP_HUB",
                                                        "CARGO_TARGET_DIR", "PATH")}
@@ -760,7 +857,7 @@ class Housekeeping(unittest.TestCase):
                     uitest.os.environ.pop(k, None)
                 self.assertEqual(uitest.find_card_host(None), None)
                 uitest.config_file().parent.mkdir(parents=True)
-                uitest.config_file().write_text(str(exe) + "\n")
+                uitest.config_file().write_text(str(exe) + "\n", encoding="utf-8")
                 found, source = uitest.find_card_host(None, with_source=True)
                 self.assertEqual(found, str(exe.resolve()))
                 self.assertIn("setup.sh", source)
@@ -770,7 +867,7 @@ class Housekeeping(unittest.TestCase):
                         uitest.os.environ.pop(k, None)
                     else:
                         uitest.os.environ[k] = v
-        setup = (Path(__file__).resolve().parent / "setup.sh").read_text()
+        setup = (Path(__file__).resolve().parent / "setup.sh").read_text(encoding="utf-8")
         self.assertIn("splash-app-verify/card-host", setup)
 
 

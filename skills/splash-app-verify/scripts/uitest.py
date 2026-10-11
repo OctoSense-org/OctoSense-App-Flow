@@ -56,6 +56,7 @@ SHIM_END = "// ---- end uitest fake host ----"
 CALL_MARK = "UITEST_CALL_"     # + run nonce: one line per host.request in the card-host log
 READY_MARK = "UITEST_READY_"   # + run nonce: the fake host is installed
 RUNNER_VERSION = 3
+CARD_HOST_NAMES = ("card-host.exe", "card-host") if os.name == "nt" else ("card-host",)
 
 # How a host treats a request for a service the manifest does not name.
 #   octosense: capability names are disclosures, not gates (App Hub e1fdf28,
@@ -344,7 +345,8 @@ def card_host_candidates(explicit):
     for var in ("OCTOSENSE_APP_HUB", "CARGO_TARGET_DIR"):
         root = os.environ.get(var)
         if root:
-            out += [(var, str(Path(root) / "target/release/card-host")), (var, str(Path(root) / "release/card-host"))]
+            for sub in ("target/release", "release"):
+                out += [(var, str(Path(root) / sub / name)) for name in CARD_HOST_NAMES]
     out.append(("PATH", shutil.which("card-host")))
     return out
 
@@ -542,7 +544,7 @@ class App:
     def peak_rss_mb(self):
         """card-host's peak resident memory (Linux), for the resource record."""
         try:
-            for line in Path(f"/proc/{self.proc.pid}/status").read_text().splitlines():
+            for line in Path(f"/proc/{self.proc.pid}/status").read_text(encoding="utf-8").splitlines():
                 if line.startswith("VmHWM:"):
                     return round(int(line.split()[1]) / 1024, 1)
         except OSError:
@@ -1034,7 +1036,8 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
                     except Exception:
                         pass
                     try:
-                        (run_dir / "snap.json").write_text(json.dumps(app.get("/snap"), ensure_ascii=False, indent=1))
+                        (run_dir / "snap.json").write_text(json.dumps(app.get("/snap"), ensure_ascii=False, indent=1),
+                                                         encoding="utf-8")
                         result["evidence"]["snap"] = str(run_dir / "snap.json")
                         png = app.get("/g", raw=1, timeout=20)
                         if isinstance(png, (bytes, bytearray)) and png[:4] == b"\x89PNG":
@@ -1056,7 +1059,7 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
             if nonce:
                 try:
                     calls = app.calls(final=True)
-                    (run_dir / "calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=1))
+                    (run_dir / "calls.json").write_text(json.dumps(calls, ensure_ascii=False, indent=1), encoding="utf-8")
                     result["evidence"]["calls"] = str(run_dir / "calls.json")
                     undeclared = sorted({c["service"] for c in calls if c.get("declared") is False})
                     if undeclared:
@@ -1082,7 +1085,7 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
             result["feedback"] = str(run_dir / "FEEDBACK.md")
         except Exception as e:
             result["feedback"] = f"(not written: {type(e).__name__}: {e})"
-    (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 
 
@@ -1430,7 +1433,7 @@ def load_scenarios(target):
 
 def write_summary(out_dir, summary):
     tmp = out_dir / "summary.json.tmp"
-    tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2))
+    tmp.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(out_dir / "summary.json")
 
 
@@ -1455,10 +1458,13 @@ def cmd_run(args):
     card_host = find_card_host(args.card_host)
     if not card_host:
         return abort("card-host not found; pass --card-host or set OCTO_CARD_HOST (scripts/setup.sh records it)")
-    summary.update(card_host=card_host, card_host_sha256=sha256(Path(card_host)))
     if not (bundle / "main.splash").is_file():
         return abort(f"{bundle} has no main.splash; uitest runs script apps")
-    summary["bundle_sha256"] = tree_digest(bundle)
+    try:
+        summary.update(card_host=card_host, card_host_sha256=sha256(Path(card_host)),
+                       bundle_sha256=tree_digest(bundle))
+    except OSError as e:
+        return abort(f"cannot read {e.filename or 'an input'} to record it: {e.strerror or e}")
     try:
         scenarios = load_scenarios(args.scenarios)
     except ScenarioError as e:
@@ -1528,6 +1534,13 @@ def cmd_doctor(args):
 
 
 def main(argv=None):
+    # Scenario names are often not in the console's code page (cp1252 on Windows):
+    # show such characters escaped rather than stop the run. Files are always UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError):
+            pass  # a stream someone replaced keeps its own settings
     p = argparse.ArgumentParser(prog="uitest.py", description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run", help="run scenarios against a bundle")
