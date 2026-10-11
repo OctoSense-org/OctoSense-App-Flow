@@ -248,7 +248,7 @@ updated. To refresh it, first preserve any local workflow customizations, then
 explicitly run `tools/octo publish-github "$APP" --replace` and review
 `git -C "$APP" diff -- .github/workflows/publish-app.yml` before committing.
 Replacement writes this generated file in full; it does not merge custom steps.
-Do not replace unrelated workflows. The current pin, App Hub `c317f787`, admits
+Do not replace unrelated workflows. The current pin, App Hub `38635915`, admits
 HTTP and host-service component imports and shared components under the
 declaration-only policy; the older `769e9ee3` publisher does not. ABI requirements,
 bundle integrity and GitHub publisher-proof checks still apply.
@@ -256,8 +256,10 @@ bundle integrity and GitHub publisher-proof checks still apply.
 This pin also includes [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209):
 ordinary WASI TCP/UDP/DNS imports require `host-api-v1` and
 `host_api.required: {"wasm.sockets": 1}`, which `tools/octo wasm build` adds.
-RC5 can read the catalog but cannot install or run these socket apps; a
-host implementing that API is still required ([Rust sockets](RUST.md#tcp-udp-and-dns)).
+RC5 can read the catalog but cannot install or run these socket apps.
+[Published desktop RC6](../README.md#compatible-shell-download) provides that API.
+A publisher check does not establish that the chosen host supports the app
+([Rust sockets](RUST.md#tcp-udp-and-dns)).
 
 CI builds the exact [publisher pin](../tools/publisher-toolchain.json) and runs
 [the native CLI regression](../tools/check-publisher-toolchain.py) against real

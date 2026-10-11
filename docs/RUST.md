@@ -19,12 +19,13 @@ in a sandbox, and the app's script calls it by name. There are two kinds:
   nothing but their input. [Core modules](#core-modules-adr-0011) at the end
   of this page covers them.
 
-**Socket support is newer than RC5.** The tooling below accepts ordinary
-TCP, UDP and DNS imports. Those apps require a forthcoming host advertising
-`wasm.sockets@1`; RC5 does not provide it. See [TCP, UDP and DNS](#tcp-udp-and-dns).
+**Socket support is available in [desktop RC6](../README.md#compatible-shell-download).**
+It provides ordinary TCP, UDP and DNS for apps requiring `wasm.sockets@1`;
+RC5 does not provide it. Test each app on its claimed platforms.
+See [TCP, UDP and DNS](#tcp-udp-and-dns).
 No native library or privileged raw-IP socket access is added.
 
-**Recorded release baseline.** [Desktop RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) is published at
+**RC5: component HTTPS and charts.** [Desktop RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) is published at
 source `83d356c2` (11 October 2026). It is the first release where a
 component's HTTPS request works: RC4 panicked while choosing a TLS provider
 on the first `wasi:http` request ([#471](https://github.com/OctoSense-org/OctoSense/pull/471)). It also registers the
@@ -39,10 +40,12 @@ restart. Its sealed component is ordinary Rust over `serde`, `serde_json`,
 one request, with a 3 s request timeout under the 10 s call deadline, and
 parses at most 2 MiB of response, since the SDK buffers the body. It
 requires `wasm-components-v1` and `host-api-v1` with
-`host_api.required: {"charts.d3": 1}`, so RC4 refuses to install it.
-[Desktop RC4](../README.md#compatible-shell-download), source `9266b008`,
-brought component loading, HTTP, public host-service imports and shared
-catalog components. Its App Hub contract 1.11
+`host_api.required: {"charts.d3": 1}`, so RC4 refuses to install it; RC6 keeps all of this and adds sockets
+(above).
+
+**Historical RC4 baseline, unchanged.** [Desktop RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)
+is published at source `9266b008`, with component loading, HTTP, public
+host-service imports and shared catalog components. Its App Hub contract 1.11
 uses `capabilities` and `network.hosts` as disclosures, not execution gates.
 `requires`, supported imports, integrity, quotas, app/account scope, actual
 device consent, native write review and inter-app sharing still apply.
@@ -57,7 +60,7 @@ retain their original scope.
 | | Core module (ADR 0011) | Component (ADR 0014) |
 | --- | --- | --- |
 | Write and build it | Copy OctoSense's guest crate; `cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`, then `tools/octo wasm build` (this page) |
-| What it reaches | Its input only | The clock, random numbers, bounded private storage, HTTP and public host services under actual authorization. |
+| What it reaches | Its input only | The clock, random numbers, bounded private storage, HTTP and public host services under actual authorization; RC6 adds TCP/UDP/DNS. |
 | Between calls | Starts fresh every call | Keeps its state |
 | The manifest | Disclose `wasm` | Require `wasm-components-v1`; socket imports also require `host-api-v1` and `host_api.required: {"wasm.sockets": 1}`. Disclose `wasm`, `storage` for files and `net` for HTTP/sockets |
 | App Hub's gate (`hub check`) | Admits it from contract 1.7 | Current source admits supported components with `wasm-components-v1`; the 1.11 policy treats family declarations as disclosures. |
@@ -560,8 +563,9 @@ bundle/manifest.json:
 
 ### TCP, UDP and DNS
 
-**Release boundary:** ordinary `std::net` sockets require a forthcoming
-OctoSense build advertising the `wasm.sockets@1` host API. Released desktop
+**Release boundary:** ordinary `std::net` sockets require the `wasm.sockets@1`
+host API, available in [published desktop RC6](../README.md#compatible-shell-download)
+(source [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)).
 RC5 does not provide it. This adds TCP streams/listeners, UDP datagrams and
 DNS through WASI, not privileged raw-IP sockets or native libraries.
 
@@ -618,7 +622,7 @@ optional ABI 1 declaration to required and refuses conflicting ABI versions.
 
 Socket apps also need socket-capable App Hub admission. This checkout's
 publisher-toolchain pin includes [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
-at `c317f787`. Older gates and already-generated release workflows can still
+at `38635915`. Older gates and already-generated release workflows can still
 refuse them. Regenerate the app's workflow with
 `tools/octo publish-github <app> --replace`; do not remove the compatibility
 requirement to make an old gate pass. Admission does not supply a compatible

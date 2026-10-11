@@ -9,14 +9,16 @@
 - **组件**（[ADR 0014](https://github.com/OctoSense-org/OctoSense/blob/9266b0083544d86bd7636543b5ff60c61b26460f/docs/adr/0014-app-components-in-webassembly.zh-CN.md)，已接受）：用本仓库的 SDK 编写普通的 Rust，`tools/octo wasm build` 把它变成 `fns/<name>.wasm`。脚本以 `wasm.<function>` 加 JSON 调用每个 `pub fn`，因此不需要编写 WIT，也不需要胶水代码。组件在调用之间保留状态，能用时钟和随机数；还能访问受配额限制的私有文件。ADR 0014 的第 3 阶段再加两项：经 HTTP 访问主机（见[网络](#网络)）；以及通过实际授权检查调用可用的公开宿主服务（见[宿主服务](#宿主服务)）。
 - **核心模块**（[ADR 0011](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0011-apps-own-functions-in-webassembly.zh-CN.md)）：处理字节或 JSON 的函数，用复制来的客体 crate 编写，只能看到自己的输入。本页末尾的[核心模块](#核心模块adr-0011)介绍它们。
 
-**套接字支持晚于 RC5。** 下述工具接受普通 TCP、UDP 和 DNS 导入，但这些应用需要即将提供的、声明 `wasm.sockets@1` 的宿主；RC5 不提供该功能。见 [TCP、UDP 和 DNS](#tcpudp-和-dns)。此变更不增加原生库或特权原始 IP 套接字访问。
+**[桌面 RC6](../README.zh-CN.md#下载兼容-shell) 已提供套接字支持。** 要求 `wasm.sockets@1` 的应用可以使用普通 TCP、UDP 和 DNS；RC5 不提供该功能。每个应用仍须在其声明的平台上测试。见 [TCP、UDP 和 DNS](#tcpudp-和-dns)。此变更不增加原生库或特权原始 IP 套接字访问。
 
-**已记录的发布基线。** [桌面 RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) 已发布，源码为 `83d356c2`（2026 年 10 月 11 日）。它是第一个组件 HTTPS 请求能正常工作的发布版本：RC4 在第一次 `wasi:http` 请求选择 TLS provider 时会 panic（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）。它还注册了原生 D3 图表，应用可用 `charts.d3@1` 声明对它们的依赖（[#470](https://github.com/OctoSense-org/OctoSense/pull/470)）。[Repo Radar](https://github.com/ymote/octosense-repo-radar) 是第一个从官方公开目录安装的组件应用：在公开的 RC5 Mac 安装包上，其[公开商店验收](https://github.com/ymote/octosense-repo-radar/blob/main/review/acceptance-public-store-0.1.2.json)通过了 93 项原生检查，覆盖经 `octosense_component::http` 向 GitHub 发出的真实请求、原生图表，以及组件保存在自己存储中、重启后仍在的关注列表。其封存的组件是基于 `serde`、`serde_json`、`semver`、`time` 和 SDK 的普通 Rust，按体积优化后为 496 KB；每次调用最多发出一个请求，请求超时 3 秒，处于 10 秒的调用期限之内，最多解析 2 MiB 响应，因为 SDK 会缓冲整个响应体。它要求 `wasm-components-v1` 与 `host-api-v1`，并声明 `host_api.required: {"charts.d3": 1}`，因此 RC4 拒绝安装它。[桌面 RC4](../README.zh-CN.md#下载兼容-shell)（源码 `9266b008`）带来了组件加载、HTTP、公开宿主服务导入与签名目录中的共享组件。它使用 App Hub 契约 1.11，`capabilities` 与 `network.hosts` 披露用途，不作为执行开关。`requires`、受支持的导入、完整性、配额、应用与账户 scope、实际设备同意、原生写入审核及应用间共享检查继续生效。最终 Mac 归档包与通过 11/11 项 Store/组件检查的候选包字节一致；测试使用真实 GitHub 证明与经管理员证明的私有演练目录，不代表官方公开目录组件安装、真实模型或 Windows/Linux 界面验收。OnePlus 6 组件检查使用隔离的源码测试包，没有升级 Home。你的确切应用仍需单独验收。RC2 与 Home beta.2 只包含核心模块；下方历史观察记录保留原有范围。
+**RC5：组件 HTTPS 与图表。** [桌面 RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) 已发布，源码为 `83d356c2`（2026 年 10 月 11 日）。它是第一个组件 HTTPS 请求能正常工作的发布版本：RC4 在第一次 `wasi:http` 请求选择 TLS provider 时会 panic（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）。它还注册了原生 D3 图表，应用可用 `charts.d3@1` 声明对它们的依赖（[#470](https://github.com/OctoSense-org/OctoSense/pull/470)）。[Repo Radar](https://github.com/ymote/octosense-repo-radar) 是第一个从官方公开目录安装的组件应用：在公开的 RC5 Mac 安装包上，其[公开商店验收](https://github.com/ymote/octosense-repo-radar/blob/main/review/acceptance-public-store-0.1.2.json)通过了 93 项原生检查，覆盖经 `octosense_component::http` 向 GitHub 发出的真实请求、原生图表，以及组件保存在自己存储中、重启后仍在的关注列表。其封存的组件是基于 `serde`、`serde_json`、`semver`、`time` 和 SDK 的普通 Rust，按体积优化后为 496 KB；每次调用最多发出一个请求，请求超时 3 秒，处于 10 秒的调用期限之内，最多解析 2 MiB 响应，因为 SDK 会缓冲整个响应体。它要求 `wasm-components-v1` 与 `host-api-v1`，并声明 `host_api.required: {"charts.d3": 1}`，因此 RC4 拒绝安装它；RC6 保留这一切，并新增套接字（见上文）。
+
+**RC4 历史基线，保持不变。** [桌面 RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4) 已发布，源码为 `9266b008`，包含组件加载、HTTP、公开宿主服务导入与签名目录中的共享组件。它使用 App Hub 契约 1.11，`capabilities` 与 `network.hosts` 披露用途，不作为执行开关。`requires`、受支持的导入、完整性、配额、应用与账户 scope、实际设备同意、原生写入审核及应用间共享检查继续生效。最终 Mac 归档包与通过 11/11 项 Store/组件检查的候选包字节一致；测试使用真实 GitHub 证明与经管理员证明的私有演练目录，不代表官方公开目录组件安装、真实模型或 Windows/Linux 界面验收。OnePlus 6 组件检查使用隔离的源码测试包，没有升级 Home。你的确切应用仍需单独验收。RC2 与 Home beta.2 只包含核心模块；下方历史观察记录保留原有范围。
 
 | | 核心模块（ADR 0011） | 组件（ADR 0014） |
 | --- | --- | --- |
 | 编写和构建 | 复制 OctoSense 的客体 crate；`cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`，然后 `tools/octo wasm build`（本页） |
-| 能访问什么 | 只有自己的输入 | 时钟、随机数、有配额的私有存储、HTTP，以及通过实际授权检查的公开宿主服务。 |
+| 能访问什么 | 只有自己的输入 | 时钟、随机数、有配额的私有存储、HTTP，以及通过实际授权检查的公开宿主服务；RC6 另提供 TCP/UDP/DNS。 |
 | 两次调用之间 | 每次调用都从头开始 | 保留状态 |
 | 清单 | 披露 `wasm` | 要求 `wasm-components-v1`；套接字导入还要求 `host-api-v1` 和 `host_api.required: {"wasm.sockets": 1}`。披露 `wasm`、文件用途的 `storage` 和 HTTP/套接字用途的 `net` |
 | App Hub 的准入检查（`hub check`） | 从契约 1.7 起接受 | 当前源码接受带有 `wasm-components-v1` 的受支持组件；1.11 策略把能力族声明视为披露。 |
@@ -357,8 +359,9 @@ bundle/manifest.json:
 
 ### TCP、UDP 和 DNS
 
-**发布边界：** 普通 `std::net` 套接字需要即将提供的、声明 `wasm.sockets@1`
-宿主 API 的 OctoSense 构建。已发布的桌面 RC5 不提供该功能。这通过 WASI 增加
+**发布边界：** 普通 `std::net` 套接字要求 `wasm.sockets@1` 宿主 API，
+[已发布的桌面 RC6](../README.zh-CN.md#下载兼容-shell) 提供该 API
+（源码 [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)）。RC5 不提供该功能。这通过 WASI 增加
 TCP 流与监听器、UDP 数据报和 DNS，不增加特权原始 IP 套接字或原生库。
 
 Rust 的 `wasm32-wasip2` 标准库提供导入，不需要学习另一套 OctoSense 套接字封装：
@@ -407,7 +410,7 @@ host.request("wasm.resolve", {host: "localhost", port: 8080}, fn(r){
 
 套接字应用还需要支持套接字的 App Hub 准入工具。本检出版本的 publisher-toolchain
 固定到包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
-的 `c317f787`。旧准入工具和已经生成的发布工作流仍可能拒绝它。用
+的 `38635915`。旧准入工具和已经生成的发布工作流仍可能拒绝它。用
 `tools/octo publish-github <app> --replace` 重新生成工作流；不要为了通过旧准入工具
 而移除兼容性要求。准入通过不等于已经有兼容的宿主发布版。
 

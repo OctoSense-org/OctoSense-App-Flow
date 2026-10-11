@@ -139,8 +139,8 @@ says who runs each one and when.
     which also adds the required `wasm-components-v1` ABI and usage
     disclosures (`storage` for files, `net` for HTTP or sockets). Socket
     imports additionally require `host-api-v1` and
-    `host_api.required: {"wasm.sockets": 1}`. This needs a forthcoming host;
-    released RC5 does not provide sockets. Missing disclosures
+    `host_api.required: {"wasm.sockets": 1}`. [Published desktop RC6](README.md#compatible-shell-download)
+    provides this API; RC5 does not provide sockets. Missing disclosures
     must not become execution gates. OctoSense #436, #451, #452, #454 and
     #455 merged component loading, HTTP, host-service imports and shared
     components; App Hub #186/#188 are also merged. Desktop RC5 is the first
@@ -148,9 +148,8 @@ says who runs each one and when.
     provider, OctoSense #471) and the first with `charts.d3@1`.
     [Repo Radar](https://github.com/ymote/octosense-repo-radar) is the public-catalog proof of the component
     path: HTTPS to GitHub through the SDK, native charts, and the app's
-    state owned by the component. Compatible release and actual app
-    acceptance remain separate. Preserve app/account scope, quotas, consent
-    and native reviews.
+    state owned by the component.     Compatible release and actual app acceptance remain separate.
+    Preserve app/account scope, quotas, consent and native reviews.
   - `card-host` answers every call with
     `no service answers "wasm" on this device`, and refuses an app that
     requires `host-api-v1`. An app that requires `wasm-components-v1` or
