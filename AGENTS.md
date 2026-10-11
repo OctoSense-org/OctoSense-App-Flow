@@ -76,7 +76,7 @@ says who runs each one and when.
   form, and no API key or token in the bundle or in the app's storage. The
   gate refuses only password and one-time-code fields; a key kept anywhere
   else is still a secret the app holds. Accounts go through a host service's
-  sheet ([docs/HOST-SERVICES.md](docs/HOST-SERVICES.md)). Use the [compatible RC2 release](README.md#compatible-shell-download),
+  sheet ([docs/HOST-SERVICES.md](docs/HOST-SERVICES.md)). Use the [compatible release](README.md#compatible-shell-download),
   within its platform limits, to sign the person in to the
   app's own backend: the bundle declares it in a signed `backend` block, or
   the host's operator registers it
@@ -141,14 +141,24 @@ says who runs each one and when.
     imports additionally require `host-api-v1` and
     `host_api.required: {"wasm.sockets": 1}`. This needs a forthcoming host;
     released RC5 does not provide sockets. Missing disclosures
-    must not become execution gates. OctoSense #453 merged component,
-    HTTP and host-service integration; App Hub #186/#188 are also merged.
-    Compatible release and actual app acceptance remain separate.
-    Preserve app/account scope, quotas, consent and native reviews.
+    must not become execution gates. OctoSense #436, #451, #452, #454 and
+    #455 merged component loading, HTTP, host-service imports and shared
+    components; App Hub #186/#188 are also merged. Desktop RC5 is the first
+    release where a component's HTTPS works (RC4 panicked choosing a TLS
+    provider, OctoSense #471) and the first with `charts.d3@1`.
+    [Repo Radar](https://github.com/ymote/octosense-repo-radar) is the public-catalog proof of the component
+    path: HTTPS to GitHub through the SDK, native charts, and the app's
+    state owned by the component. Compatible release and actual app
+    acceptance remain separate. Preserve app/account scope, quotas, consent
+    and native reviews.
   - `card-host` answers every call with
-    `no service answers "wasm" on this device`. An isolated Wasm fixture is
-    not evidence that your app's functions work; test its exact bundle and
-    host.
+    `no service answers "wasm" on this device`, and refuses an app that
+    requires `host-api-v1`. An app that requires `wasm-components-v1` or
+    `host-api-v1` is therefore driven in the compatible release with the
+    shell's Makepad instrument, in a profile of its own, as Repo Radar's
+    [native acceptance](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md) does; never remove a `requires` entry
+    to make a preview pass. An isolated Wasm fixture is not evidence that
+    your app's functions work; test its exact bundle and host.
 - **Only needed capabilities.** Map each capability to something a screen
   does ([docs/CAPABILITIES.md](docs/CAPABILITIES.md)), and remove the rest.
 - **Check that a family serves store apps before you build on it.** The gate
@@ -284,7 +294,7 @@ Hand off only when all of these hold:
    `listing.json` and inspected.
 3. You have driven every interaction in the brief natively in `card-host`
    (click, type and tap through the remote bridge) and observed its effect.
-   For an app that `card-host` refuses, use the compatible RC2 release ([docs/HOST-API-V1.md](docs/HOST-API-V1.md#before-publishing)).
+   For an app that `card-host` refuses, use the [compatible release](README.md#compatible-shell-download) ([docs/HOST-API-V1.md](docs/HOST-API-V1.md#before-publishing)); for one with its own component, see [docs/RUST.md](docs/RUST.md#6-test-it).
 4. You have exercised the empty, error and restart states.
 5. The `hub scan` packet is written outside the bundle and its questions are
    answered: seven, or eight when the bundle ships `tools.json`, `AGENT.md`

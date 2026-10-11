@@ -32,6 +32,18 @@ Windows, run it as `python $OCTO`.
    (`$OCTO shot 8141 bundle/screenshots/01-main.png` in step 3), the gate
    refuses the listing; fix every other `[refused]` line before you go on.
 
+If this app has its own Rust component (`components/<name>/`, built into
+`bundle/fns/<name>.wasm` by `$OCTO wasm build --app .`), the loop above
+covers the layout only: `card-host` answers every `wasm.*` call with
+`no service answers "wasm" on this device`, and it refuses an app that
+requires `host-api-v1`. Test the component's logic natively with
+`cargo test --locked` in its crate, then drive the whole app in the
+[compatible OctoSense release](https://github.com/OctoSense-org/OctoSense-App-Flow/blob/main/README.md#compatible-shell-download)
+with the shell's Makepad instrument, in a profile of its own
+([RUST § Test it](https://github.com/OctoSense-org/OctoSense-App-Flow/blob/main/docs/RUST.md#6-test-it));
+Repo Radar's [native acceptance](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md) is a scripted example. Never
+remove a `requires` entry to make a preview pass.
+
 Follow these rules:
 
 - Ask only for capabilities a screen uses; declare every `https://` host in
