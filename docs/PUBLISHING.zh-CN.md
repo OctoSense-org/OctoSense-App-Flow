@@ -164,7 +164,7 @@ tools/octo publish-github "$APP"
 
 `tools/octo new` 也会安装 `.github/workflows/publish-app.yml`。这条命令只写入这个文件，不会推送、创建 Release、提交或批准应用。除非显式加上 `--replace`，否则它拒绝覆盖内容不同的已有工作流。不需要开发者签名 secret；工作流使用 GitHub 的短期任务令牌和 OIDC 权限生成证明并创建 Release。
 
-更新 App Flow 不会改变已有生成工作流固定的 Hub 版本。需要更新时，先保留自己定制的工作流步骤，再显式运行 `tools/octo publish-github "$APP" --replace`，并在提交前审阅 `git -C "$APP" diff -- .github/workflows/publish-app.yml`。替换会重写整个生成文件，不会合并定制步骤；不要用它覆盖无关工作流。当前固定的 App Hub `c317f787` 支持 HTTP、宿主服务组件导入和共享组件，并采用声明仅用于披露的策略；旧的 `769e9ee3` 发布工具不支持这些行为。ABI 要求、应用包完整性和 GitHub 发布者证明检查仍然有效。
+更新 App Flow 不会改变已有生成工作流固定的 Hub 版本。需要更新时，先保留自己定制的工作流步骤，再显式运行 `tools/octo publish-github "$APP" --replace`，并在提交前审阅 `git -C "$APP" diff -- .github/workflows/publish-app.yml`。替换会重写整个生成文件，不会合并定制步骤；不要用它覆盖无关工作流。当前固定的 App Hub `38635915` 支持 HTTP、宿主服务组件导入和共享组件，并采用声明仅用于披露的策略；旧的 `769e9ee3` 发布工具不支持这些行为。ABI 要求、应用包完整性和 GitHub 发布者证明检查仍然有效。
 
 这个固定版本还包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)：
 普通 WASI TCP/UDP/DNS 导入要求 `host-api-v1` 和

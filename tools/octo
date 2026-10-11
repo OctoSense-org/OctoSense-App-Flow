@@ -53,7 +53,7 @@ RESERVED_NAMES = frozenset({
     "agents", "apphub", "appcard", "browser", "calculator", "card", "clock",
     "dev", "notes", "octos", "octoscode", "os", "reference", "reminders",
     "rinx", "sheets", "shell", "system", "task", "terminal", "toolbox",
-    "weather", "workflow",
+    "updater", "weather", "workflow",
 })
 PLATFORMS = ("android", "ios", "macos", "windows", "linux", "openharmony", "web")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
