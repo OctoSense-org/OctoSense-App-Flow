@@ -1,0 +1,7 @@
+{
+  "name": "an empty input adds nothing",
+  "steps": [
+    {"click": {"text": "Add"}},
+    {"expect": {"text": ["No notes yet."], "files": [{"name": "notes.json", "missing": true}]}}
+  ]
+}

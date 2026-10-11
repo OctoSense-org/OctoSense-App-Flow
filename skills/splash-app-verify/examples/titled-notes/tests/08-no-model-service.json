@@ -1,0 +1,9 @@
+{
+  "name": "no model service on this host (card-host as it is)",
+  "storage": {"notes-v1.json": {"version": 1, "notes": [{"text": "Water plants", "title": ""}]}},
+  "steps": [
+    {"wait": {"text": ["Water plants"]}},
+    {"click": {"text": "Suggest a title"}},
+    {"wait": {"text": ["Titles need the OctoSense model service"]}}
+  ]
+}

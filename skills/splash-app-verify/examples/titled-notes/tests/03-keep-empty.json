@@ -1,0 +1,7 @@
+{
+  "name": "keep with an empty input: a hint, nothing saved",
+  "steps": [
+    {"click": {"text": "Keep"}},
+    {"expect": {"text": ["Write something first"], "files": [{"name": "notes-v1.json", "missing": true}]}}
+  ]
+}

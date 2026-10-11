@@ -107,6 +107,10 @@ macOS 上的原生公开签名目录安装及 0.2.0 → 0.2.1 更新保留了本
 
 需要人来把关的节点（Release 工作流、发布者身份与隐私文本、平台声明、付费图像生成、视觉确认、Release 的 tag、提交）都列在 [AGENTS.md](AGENTS.md#how-to-work) 中；[flows/README.zh-CN.md](flows/README.zh-CN.md#每个流程都遵循同一份约定) 说明所有流程共有的那些节点。Agent 绝不伪造人的确认、评审结果或提交记录。
 
+### 脚本应用验证技能
+
+编写或修改脚本应用（`main.splash`）时，使用 [splash-app-verify](skills/splash-app-verify/SKILL.md)。它把工作前移：先写契约和测试场景再写代码，让应用保持可测试的收窄结构，每次修改后在 `card-host` 中运行全部场景，宿主服务的回复由场景提供。场景失败时，按 [MODEL-VALIDATION](docs/MODEL-VALIDATION.zh-CN.md) 要求的格式写出修复请求。它检查行为和位置，不评判外观，也不替代准入检查和视觉评审。
+
 ### AppCard UX 技能
 
 设计或验收速览卡片时，使用 [octoscript-app-card-ux](skills/octoscript-app-card-ux/SKILL.md)。它补充摘要 → 展开卡片 → 完整工作区的任务流程、Chat/编辑/审阅共用状态、键盘和滚动检查，以及保留指定模型创作归属的修复循环。验收矩阵区分本地行为、真实 Agent 执行、外部业务效果和视觉批准，历史分数不能代替新卡片的验收。

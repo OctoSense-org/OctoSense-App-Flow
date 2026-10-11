@@ -1,0 +1,8 @@
+{
+  "name": "first screen: empty list, hint, both buttons in view",
+  "sizes": ["412x892", "990x613"],
+  "steps": [
+    {"expect": {"text": ["Titled Notes", "No notes yet.", "Write a note and keep it."],
+                "in_view": [{"id": "entry"}, {"text": "Keep"}, {"text": "Suggest a title"}]}}
+  ]
+}

@@ -1,0 +1,132 @@
+// Titled Notes: the narrow shape from references/SHAPE.md, small enough to read
+// in one sitting. Notes are kept on the device; "Suggest a title" asks the
+// host's model service once, and every reply the contract lists has a visible
+// result.
+
+// ---- 1. State: top-level lets only.
+let notes = []            // [{text, title}]
+let status = "Write a note and keep it."
+let asking = false
+let ask_token = 0         // the reply to an older request is ignored
+let store_file = "notes-v1.json"
+let store_locked = false  // the file could not be read: never write over it
+
+// ---- 2. Decisions: plain functions, data in, data out, no ui.
+fn clean(text){ text.trim() }
+fn note_ok(text){ text != "" && text.len() <= 500 }
+fn with_note(list, text){
+    let out = []
+    for n in list { out.push(n) }
+    out.push({text: text, title: ""})
+    out
+}
+fn store_valid(v){
+    try {
+        if v == nil || v.version != 1 || !v.notes.is_array() { return false }
+        for n in v.notes { if !n.text.is_string() || !n.title.is_string() { return false } }
+        true
+    } catch { false }
+}
+fn model_message(error){
+    // `<code>: <sentence>` from model.complete (docs/AI-SERVICES.md).
+    if error.search("no service answers") >= 0 { return "Titles need the OctoSense model service; notes still work." }
+    if error.search("not granted") >= 0 { return "This app may not use the model. Notes still work." }
+    if error.search("budget") == 0 || error.search("rate") == 0 { return "Today's AI budget is used up. Try tomorrow." }
+    if error.search("no_provider") == 0 { return "No AI provider is set up in OctoSense." }
+    "No title: " + error
+}
+
+// ---- 3. Storage: one versioned file, validated on read.
+fn load(){
+    if fs.exists(store_file) {
+        let v = fs.read(store_file).parse_json()
+        if store_valid(v) { notes = v.notes } else {
+            // Keep the unreadable file as it is: the person may still recover it.
+            store_locked = true
+            status = "The saved notes could not be read; nothing was changed, and nothing will be saved over them."
+        }
+    }
+    sync()
+}
+fn save(){
+    if store_locked { return false }
+    fs.write(store_file, {version: 1, notes: notes}.to_json())
+    true
+}
+
+// ---- 4. Actions: change state, then sync once.
+fn keep(){
+    let text = clean(ui.entry.text())
+    if store_locked { status = "Not kept: the saved notes could not be read, and keeping would overwrite them." sync() return }
+    if !note_ok(text) { status = "Write something first (up to 500 characters)." sync() return }
+    notes = with_note(notes, text)
+    save()
+    ui.entry.set_text("")
+    status = "Kept."
+    sync()
+}
+
+// ---- 5. Host service: one function, every reply handled, stale replies ignored.
+fn suggest_title(){
+    if notes.len() == 0 { status = "Keep a note first." sync() return }
+    if asking { return }
+    ask_token += 1
+    let token = ask_token
+    let index = notes.len() - 1
+    asking = true
+    status = "Asking for a title…"
+    sync()
+    host.request("model.complete", {
+        task: "Give the note a short title."
+        input: {note: notes[index].text}
+        schema: {type: "object" required: ["title"] additionalProperties: false
+                 properties: {title: {type: "string" maxLength: 40}}}
+        class: "fast"
+    }, fn(r){
+        if token != ask_token { return }
+        asking = false
+        if !r.is_ok { status = model_message(r.error) sync() return }
+        let title = ""
+        try { title = r.data.output.title } catch { title = "" }
+        if !title.is_string() || title.trim() == "" { status = "The reply had no title." sync() return }
+        notes[index].title = title.trim()
+        save()
+        status = "Titled."
+        sync()
+    })
+    start_timeout(20.0, || {
+        if token == ask_token && asking { asking = false ask_token += 1 status = "No answer in 20 seconds. Try again." sync() }
+    })
+}
+
+// ---- 6. Sync: the only place that writes to the screen.
+fn sync(){
+    ui.status.set_text(status)
+    ui.list.render()
+}
+
+start_timeout(0.05, || load())
+
+let ink = #x1c1c1e
+let secondary = #x8e8e93
+let Chip = ButtonFlat{height: 40 padding: Inset{left: 16 right: 16}
+    draw_bg +: {border_radius: 20.0 color: #x007aff color_hover: #x0a84ff color_down: #x0062cc color_focus: #x007aff border_size: 1.0 border_color: #x007aff border_color_hover: #x0a84ff border_color_down: #x0062cc border_color_focus: #x007aff}
+    draw_text +: {color: #xffffff color_hover: #xffffff color_down: #xffffff color_focus: #xffffff}}
+SolidView{width: Fill height: Fill flow: Down padding: 16 spacing: 12 draw_bg.color: #xffffff
+    Label{width: Fill text: "Titled Notes" draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 24}}
+    status := Label{width: Fill text: "" draw_text.color: secondary draw_text.text_style.font_size: 13}
+    View{width: Fill height: Fit flow: Right{wrap: true} spacing: 8 align: Align{y: 0.5}
+        entry := TextInput{width: Fill height: 40 empty_text: "Write a note"
+            draw_bg +: {color: #xf2f2f7 color_hover: #xf2f2f7 color_focus: #xf2f2f7 color_empty: #xf2f2f7 border_radius: 10.0}
+            draw_text +: {color: ink color_hover: ink color_focus: ink color_empty: secondary color_empty_hover: secondary}}
+        keep_button := Chip{text: "Keep" on_click: || keep()}
+        title_button := Chip{text: "Suggest a title" on_click: || suggest_title()}
+    }
+    list := ScrollYView{width: Fill height: Fill flow: Down spacing: 8 on_render: || {
+        if notes.len() == 0 { Label{text: "No notes yet." draw_text.color: secondary} }
+        for i in notes.len() {
+            if notes[i].title != "" { Label{width: Fill text: notes[i].title draw_text.color: ink draw_text.text_style: theme.font_bold{font_size: 14}} }
+            Label{width: Fill text: notes[i].text draw_text.color: ink draw_text.text_style.font_size: 15}
+        }
+    }}
+}

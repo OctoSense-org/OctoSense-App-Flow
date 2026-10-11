@@ -1,0 +1,8 @@
+{
+  "name": "first screen: empty list and the add row in view",
+  "sizes": ["412x892", "990x613"],
+  "steps": [
+    {"expect": {"text": ["My Notes", "No notes yet.", "Tap a note to remove it."],
+                "in_view": [{"id": "entry"}, {"text": "Add"}]}}
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "the model never answers: the app stops waiting by itself",
+  "storage": {"notes-v1.json": {"version": 1, "notes": [{"text": "Book dentist", "title": ""}]}},
+  "host": {"model.complete": {"never": true}},
+  "steps": [
+    {"wait": {"text": ["Book dentist"]}},
+    {"click": {"text": "Suggest a title"}},
+    {"expect": {"text": ["Asking for a title"]}},
+    {"wait": {"text": ["No answer in 20 seconds"]}, "timeout": 25}
+  ]
+}

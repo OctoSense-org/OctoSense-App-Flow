@@ -65,6 +65,9 @@ says who runs each one and when.
    loaded, not only that it opens. Judge behavior, layout and appearance
    separately. Keep the evidence of every failure, and say which checks a
    person ran and which you ran.
+   For a script app, use [the script app verify skill](skills/splash-app-verify/SKILL.md):
+   the contract and scenarios before the code, and the scenarios run after
+   every edit.
    For new Glance cards or card UX acceptance, also use
    [the app-card UX skill](skills/octoscript-app-card-ux/SKILL.md): summary-to-workspace
    transitions, shared editing state, keyboard/scrolling checks and source-bound
@@ -343,4 +346,4 @@ The full list is in [docs/SCRIPT-API.md](docs/SCRIPT-API.md#gotchas).
 - Loop with `for i in n`; there is no `range()`.
 - Write `name := Widget{}` to address a widget as `ui.name`.
 - `draw_bg +: {…}` merges your fields into the existing `draw_bg`.
-- In `on_render`, keep `if` and `for` separate (no `else for`).
+- In `on_render`, keep `if` and `for` separate (no `else for`, braced or not).

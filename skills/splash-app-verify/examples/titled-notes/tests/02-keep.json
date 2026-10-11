@@ -1,0 +1,9 @@
+{
+  "name": "keep a note: shown, saved, input cleared",
+  "steps": [
+    {"type": {"into": {"id": "entry"}, "text": "Call the plumber"}},
+    {"click": {"text": "Keep"}},
+    {"wait": {"text": ["Call the plumber", "Kept."], "absent": ["No notes yet."],
+              "files": [{"name": "notes-v1.json", "contains": ["Call the plumber", "\"version\":1"]}]}}
+  ]
+}

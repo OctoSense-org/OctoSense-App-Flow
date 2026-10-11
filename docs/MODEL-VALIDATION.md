@@ -8,6 +8,11 @@ from the final source: a successful tool call or a model's summary is not enough
 Use this guide alongside the selected [flow](../flows/README.md), not as a
 replacement for its admission, visual-review or publishing gates.
 
+For script apps, the [script app verify skill](../skills/splash-app-verify/SKILL.md)
+turns this loop into scenario files that run in `card-host` after every edit,
+with host services answered from the scenario, and writes the executable
+feedback below when one fails.
+
 For Glance card work, the [app-card UX skill](../skills/octoscript-app-card-ux/SKILL.md)
 adds a task journey and acceptance matrix for workspace expansion, shared editing
 state, phone keyboard reachability and retained context. It reuses this model

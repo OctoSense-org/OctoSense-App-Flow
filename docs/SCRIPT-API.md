@@ -328,7 +328,10 @@ installed apps; disclosure changes do not expose the host profile.
   an exponent.
 - **`on_render` empty state:** write `if list.len() == 0 { Empty } for i in list.len() { Row }`.
   Do not write `if … {…} else for …`: the empty branch draws nothing and stale
-  rows stay on screen (**✓ run**).
+  rows stay on screen (**✓ run**). The braced form `if … {…} else { for … }`
+  fails the same way: the empty label is never drawn (**✓ run**, a scenario in
+  [splash-app-verify](../skills/splash-app-verify/SKILL.md) against a copy of its
+  example with only that change).
 - **Backgrounds:** `View{show_bg: true draw_bg.color: …}` draws no background
   in `card-host`, whether always visible or shown later with
   `set_visible(true)` (**✓ run**); `SolidView{draw_bg.color: …}` does. Use
