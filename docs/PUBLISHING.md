@@ -256,8 +256,10 @@ bundle integrity and GitHub publisher-proof checks still apply.
 This pin also includes [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209):
 ordinary WASI TCP/UDP/DNS imports require `host-api-v1` and
 `host_api.required: {"wasm.sockets": 1}`, which `tools/octo wasm build` adds.
-RC5 can read the catalog but cannot install or run these socket apps; a
-host implementing that API is still required ([Rust sockets](RUST.md#tcp-udp-and-dns)).
+RC5 can read the catalog but cannot install or run these socket apps.
+[Published desktop RC6](../README.md#compatible-shell-download) provides that API.
+A publisher check does not establish that the chosen host supports the app
+([Rust sockets](RUST.md#tcp-udp-and-dns)).
 
 CI builds the exact [publisher pin](../tools/publisher-toolchain.json) and runs
 [the native CLI regression](../tools/check-publisher-toolchain.py) against real

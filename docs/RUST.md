@@ -19,12 +19,13 @@ in a sandbox, and the app's script calls it by name. There are two kinds:
   nothing but their input. [Core modules](#core-modules-adr-0011) at the end
   of this page covers them.
 
-**Socket support is newer than RC5.** The tooling below accepts ordinary
-TCP, UDP and DNS imports. Those apps require a forthcoming host advertising
-`wasm.sockets@1`; RC5 does not provide it. See [TCP, UDP and DNS](#tcp-udp-and-dns).
+**Socket support is available in [desktop RC6](../README.md#compatible-shell-download).**
+It provides ordinary TCP, UDP and DNS for apps requiring `wasm.sockets@1`;
+RC5 does not provide it. Test each app on its claimed platforms.
+See [TCP, UDP and DNS](#tcp-udp-and-dns).
 No native library or privileged raw-IP socket access is added.
 
-**Recorded release baseline.** [Desktop RC4](../README.md#compatible-shell-download)
+**Historical RC4 baseline, unchanged.** [Desktop RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)
 is published at source `9266b008`, with component loading, HTTP, public
 host-service imports and shared catalog components. Its App Hub contract 1.11
 uses `capabilities` and `network.hosts` as disclosures, not execution gates.
@@ -41,7 +42,7 @@ retain their original scope.
 | | Core module (ADR 0011) | Component (ADR 0014) |
 | --- | --- | --- |
 | Write and build it | Copy OctoSense's guest crate; `cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`, then `tools/octo wasm build` (this page) |
-| What it reaches | Its input only | The clock, random numbers, bounded private storage, HTTP and public host services under actual authorization. |
+| What it reaches | Its input only | The clock, random numbers, bounded private storage, HTTP and public host services under actual authorization; RC6 adds TCP/UDP/DNS. |
 | Between calls | Starts fresh every call | Keeps its state |
 | The manifest | Disclose `wasm` | Require `wasm-components-v1`; socket imports also require `host-api-v1` and `host_api.required: {"wasm.sockets": 1}`. Disclose `wasm`, `storage` for files and `net` for HTTP/sockets |
 | App Hub's gate (`hub check`) | Admits it from contract 1.7 | Current source admits supported components with `wasm-components-v1`; the 1.11 policy treats family declarations as disclosures. |
@@ -531,8 +532,9 @@ bundle/manifest.json:
 
 ### TCP, UDP and DNS
 
-**Release boundary:** ordinary `std::net` sockets require a forthcoming
-OctoSense build advertising the `wasm.sockets@1` host API. Released desktop
+**Release boundary:** ordinary `std::net` sockets require the `wasm.sockets@1`
+host API, available in [published desktop RC6](../README.md#compatible-shell-download)
+(source [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)).
 RC5 does not provide it. This adds TCP streams/listeners, UDP datagrams and
 DNS through WASI, not privileged raw-IP sockets or native libraries.
 

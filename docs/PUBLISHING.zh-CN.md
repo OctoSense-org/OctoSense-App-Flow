@@ -169,8 +169,8 @@ tools/octo publish-github "$APP"
 这个固定版本还包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)：
 普通 WASI TCP/UDP/DNS 导入要求 `host-api-v1` 和
 `host_api.required: {"wasm.sockets": 1}`，`tools/octo wasm build` 会自动加入。
-RC5 能读取目录，但不能安装或运行这些套接字应用；仍需要实现该 API 的宿主
-（见 [Rust 套接字](RUST.zh-CN.md#tcpudp-和-dns)）。
+RC5 能读取目录，但不能安装或运行这些套接字应用。[已发布的桌面 RC6](../README.zh-CN.md#下载兼容-shell) 提供该 API。发布工具检查通过，
+并不能证明所选宿主支持该应用（见 [Rust 套接字](RUST.zh-CN.md#tcpudp-和-dns)）。
 
 CI 会构建[固定版本的发布工具](../tools/publisher-toolchain.json)，用真实 SDK 组件运行[原生 CLI 回归检查](../tools/check-publisher-toolchain.py)，验证结构准入和发布准备，以及缺失 ABI、组件格式错误和缺失发布证明时的拒绝。这个检查不会生成证明、发布应用或执行组件，也不代表 shell 或设备功能验收。
 
