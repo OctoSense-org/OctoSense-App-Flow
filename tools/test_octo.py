@@ -57,7 +57,7 @@ class Onboarding(unittest.TestCase):
 
     def test_reserved_ids_and_namespaces_leave_no_partial_project(self):
         names = ('agents apphub appcard browser calculator card clock dev notes octos octoscode os '
-                 'reference reminders rinx sheets shell system task terminal toolbox weather workflow').split()
+                 'reference reminders rinx sheets shell system task terminal toolbox updater weather workflow').split()
         with tempfile.TemporaryDirectory() as temp:
             for name in names:
                 for app_id in (name, 'com.example.' + name):

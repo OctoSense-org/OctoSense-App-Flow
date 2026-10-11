@@ -248,7 +248,7 @@ updated. To refresh it, first preserve any local workflow customizations, then
 explicitly run `tools/octo publish-github "$APP" --replace` and review
 `git -C "$APP" diff -- .github/workflows/publish-app.yml` before committing.
 Replacement writes this generated file in full; it does not merge custom steps.
-Do not replace unrelated workflows. The current pin, App Hub `c317f787`, admits
+Do not replace unrelated workflows. The current pin, App Hub `38635915`, admits
 HTTP and host-service component imports and shared components under the
 declaration-only policy; the older `769e9ee3` publisher does not. ABI requirements,
 bundle integrity and GitHub publisher-proof checks still apply.
