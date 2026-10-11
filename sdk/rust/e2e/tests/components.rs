@@ -14,7 +14,7 @@
 
 use std::future::Future;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{SocketAddr, TcpListener, TcpStream, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -252,13 +252,28 @@ fn compile(package: &str, file: &str) -> (Engine, Component) {
 
 /// Loads a component whose host services are `services`.
 fn load_with(storage: &Path, package: &str, file: &str, services: Option<Services>) -> Loaded {
+    load_with_sockets(storage, package, file, services, false)
+}
+
+/// SDK transport test only. The production host owns socket quotas,
+/// cancellation and lifecycle tests; this harness verifies std::net's ABI.
+fn load_with_sockets(
+    storage: &Path,
+    package: &str,
+    file: &str,
+    services: Option<Services>,
+    sockets: bool,
+) -> Loaded {
     let (engine, component) = compile(package, file);
     let stderr = MemoryOutputPipe::new(64 << 10);
     let mut wasi = WasiCtxBuilder::new();
     wasi.stderr(stderr.clone())
-        .allow_tcp(false)
-        .allow_udp(false)
-        .allow_ip_name_lookup(false);
+        .allow_tcp(sockets)
+        .allow_udp(sockets)
+        .allow_ip_name_lookup(sockets);
+    if sockets {
+        wasi.inherit_network();
+    }
     wasi.preopened_dir(storage, "/", FsPerms::ReadWrite)
         .unwrap();
     let mut store = Store::new(
@@ -584,6 +599,106 @@ fn every_type_mapping_crosses_both_ways() {
 }
 
 // ------------------------------------------------- phase 3: HTTP and host calls
+
+#[test]
+fn standard_library_tcp_udp_and_dns_run_in_a_component() {
+    let dir = storage();
+    let mut c = load_with_sockets(&dir, "socket-client", "socket_client.wasm", None, true);
+    let tcp = TcpListener::bind("127.0.0.1:0").unwrap();
+    let tcp_address = tcp.local_addr().unwrap();
+    let tcp_server = std::thread::spawn(move || {
+        let (mut stream, _) = tcp.accept().unwrap();
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut data = [0; 4];
+        stream.read_exact(&mut data).unwrap();
+        stream.write_all(&data).unwrap();
+        // Component RAII closes its socket when the exported function returns.
+        assert_eq!(stream.read(&mut data).unwrap(), 0);
+    });
+    assert_eq!(
+        call(
+            &mut c,
+            "tcp-echo",
+            &[s(&tcp_address.to_string()), s("ping")]
+        ),
+        Val::Result(Ok(Some(Box::new(s("ping")))))
+    );
+    tcp_server.join().unwrap();
+
+    let udp = UdpSocket::bind("127.0.0.1:0").unwrap();
+    udp.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    let udp_address = udp.local_addr().unwrap();
+    let udp_server = std::thread::spawn(move || {
+        let mut data = [0; 1024];
+        let (count, source) = udp.recv_from(&mut data).unwrap();
+        udp.send_to(&data[..count], source).unwrap();
+    });
+    assert_eq!(
+        call(
+            &mut c,
+            "udp-echo",
+            &[s(&udp_address.to_string()), s("datagram")]
+        ),
+        Val::Result(Ok(Some(Box::new(s("datagram")))))
+    );
+    udp_server.join().unwrap();
+
+    // The WASI std UDP backend lacks set_read_timeout. The example's
+    // nonblocking loop must still stop when its peer never replies.
+    let silent = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let started = Instant::now();
+    assert_eq!(
+        error(call(
+            &mut c,
+            "udp-echo",
+            &[s(&silent.local_addr().unwrap().to_string()), s("silence")]
+        )),
+        "UDP echo timed out"
+    );
+    assert!(started.elapsed() < Duration::from_secs(5));
+
+    let resolved = call(
+        &mut c,
+        "resolve",
+        &[s("localhost"), Val::U16(tcp_address.port())],
+    );
+    match resolved {
+        Val::Result(Ok(Some(addresses))) => match *addresses {
+            Val::List(addresses) => {
+                assert!(!addresses.is_empty());
+                for address in addresses {
+                    let Val::String(address) = address else {
+                        panic!("not an address")
+                    };
+                    let address: SocketAddr = address.parse().unwrap();
+                    assert!(address.ip().is_loopback());
+                    assert_eq!(address.port(), tcp_address.port());
+                }
+            }
+            other => panic!("{other:?}"),
+        },
+        other => panic!("{other:?}"),
+    }
+    drop(c);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn socket_client_reports_refusal_on_a_host_without_socket_support() {
+    let dir = storage();
+    let mut c = load_component(&dir, "socket-client", "socket_client.wasm");
+    for (function, args) in [
+        ("tcp-echo", vec![s("127.0.0.1:9"), s("ping")]),
+        ("udp-echo", vec![s("127.0.0.1:9"), s("ping")]),
+        ("resolve", vec![s("localhost"), Val::U16(9)]),
+    ] {
+        assert!(!error(call(&mut c, function, &args)).is_empty());
+    }
+    drop(c);
+    std::fs::remove_dir_all(dir).unwrap();
+}
 
 /// A local HTTP/1.1 server, one request per connection: `POST` echoes its
 /// body with its content type; `GET /missing` answers 404; any other `GET`

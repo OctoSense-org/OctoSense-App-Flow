@@ -19,7 +19,12 @@ in a sandbox, and the app's script calls it by name. There are two kinds:
   nothing but their input. [Core modules](#core-modules-adr-0011) at the end
   of this page covers them.
 
-**Current source and release boundary.** [Desktop RC4](../README.md#compatible-shell-download)
+**Socket support is newer than RC5.** The tooling below accepts ordinary
+TCP, UDP and DNS imports. Those apps require a forthcoming host advertising
+`wasm.sockets@1`; RC5 does not provide it. See [TCP, UDP and DNS](#tcp-udp-and-dns).
+No native library or privileged raw-IP socket access is added.
+
+**Recorded release baseline.** [Desktop RC4](../README.md#compatible-shell-download)
 is published at source `9266b008`, with component loading, HTTP, public
 host-service imports and shared catalog components. Its App Hub contract 1.11
 uses `capabilities` and `network.hosts` as disclosures, not execution gates.
@@ -38,7 +43,7 @@ retain their original scope.
 | Write and build it | Copy OctoSense's guest crate; `cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`, then `tools/octo wasm build` (this page) |
 | What it reaches | Its input only | The clock, random numbers, bounded private storage, HTTP and public host services under actual authorization. |
 | Between calls | Starts fresh every call | Keeps its state |
-| The manifest | Disclose `wasm` | Require `wasm-components-v1`; disclose `wasm`, `storage` for files and `net` for HTTP |
+| The manifest | Disclose `wasm` | Require `wasm-components-v1`; socket imports also require `host-api-v1` and `host_api.required: {"wasm.sockets": 1}`. Disclose `wasm`, `storage` for files and `net` for HTTP/sockets |
 | App Hub's gate (`hub check`) | Admits it from contract 1.7 | Current source admits supported components with `wasm-components-v1`; the 1.11 policy treats family declarations as disclosures. |
 | Current source (macOS, Windows, Linux, Android and OpenHarmony) | Included; OpenHarmony uses Pulley | Included, with phase 3 adapters and per-app shared-component loading; iOS excluded. Source inclusion does not establish device acceptance. |
 | `card-host` | Admits the app; calls answer `no service answers "wasm" on this device` | Also has no `wasm` service. Manifest admission does not make a component runnable there. |
@@ -226,15 +231,16 @@ For each crate in `components/` (or each `--crate DIR`), it:
 1. runs `cargo build --release --target wasm32-wasip2`;
 2. reads the component's imports, and stops without changing the bundle if
    one is outside `wasi:cli`, `wasi:clocks`, `wasi:filesystem`, `wasi:http`,
-   `wasi:io`, `wasi:random` and `octosense:host`, the packages the `wasm`
-   service gives a component;
+   `wasi:io`, `wasi:random`, `wasi:sockets` and `octosense:host`, the supported
+   packages (socket imports require a newer host than RC5);
 3. records in the component the crates it is built from
    ([The crates it is built from](#the-crates-it-is-built-from));
 4. copies it to `bundle/fns/<name>.wasm`;
 5. adds `wasm` to the manifest's `capabilities` and `wasm-components-v1` to
    its `requires`, `storage` when a component imports `wasi:filesystem`,
-   and `net` when one imports `wasi:http`, saying what it changed. It never
-   adds a host to `network.hosts` or asks for one ([Network](#network));
+   and `net` when one imports `wasi:http` or `wasi:sockets`, saying what it changed.
+   Socket imports also add `host-api-v1` and `host_api.required: {"wasm.sockets": 1}`
+   so older hosts refuse this app before installing it. It never adds a host to `network.hosts` or asks for one ([Network](#network));
 6. warns about what the gate or the service would refuse later: more than 8
    files in `fns/`, two files exporting one function name, a bundle over
    8 MiB;
@@ -257,9 +263,10 @@ The template's functions never read the time, but its component imports
 `wasi:clocks/monotonic-clock`, as every component built with Rust's standard
 library here does.
 
-A function that opens a socket builds, but `tools/octo wasm build` refuses
-the component. With `std::net::TcpStream::connect(addr)` in a function, it
-prints:
+**Historical output from tooling before socket support:** a function using
+`std::net::TcpStream::connect(addr)` built, but the old `tools/octo wasm build`
+refused it. Current tooling accepts it and records the required host API
+instead ([TCP, UDP and DNS](#tcp-udp-and-dns)). The old output was:
 
 ```text
 octo: text-tools imports what no host gives a component, so the wasm service would refuse to load it and App Hub's gate refuses the bundle:
@@ -427,7 +434,7 @@ shell, test the exact app and compatible build separately.
 | Files | The app's bounded private storage is `/`, read/write through `std::fs`; other device files remain outside the jail. Omitted `storage` does not remove this jail. |
 | stdout and stderr | They become the app's log lines |
 | The environment, arguments and stdin | Empty |
-| The network | Phase 3: any host, over HTTPS or plain HTTP, through `wasi:http`, with `net` disclosed ([Network](#network)). It has no sockets: `wasi:sockets` is refused. |
+| The network | Phase 3: any host, over HTTPS or plain HTTP, through `wasi:http`, with `net` disclosed ([Network](#network)). Ordinary TCP/UDP/DNS use `wasi:sockets` on a host advertising `wasm.sockets@1`; RC5 refuses these imports. |
 | Threads | No: `wasm32-wasip2` has none |
 | Host services | Phase 3: available public services under the same actual authorization as its script, through `octosense:host` ([Host services](#host-services)) |
 | Other apps | No |
@@ -438,8 +445,8 @@ shell, test the exact app and compatible build separately.
 Wasmtime 49; they do not prove provider calls from an installed app.
 OctoSense source includes phase 3; app acceptance needs a compatible build.
 
-A component reaches the network only through `wasi:http`, and it reaches any
-host. Under OctoSense's ruling of 8 October 2026, an app's network
+For HTTP, a component uses `wasi:http` and can reach any host.
+[TCP, UDP and DNS](#tcp-udp-and-dns) are a separate newer-host path. Under OctoSense's ruling of 8 October 2026, an app's network
 declarations (`net`, `network.hosts`) are shown at install and not enforced
 while the app runs: the OS and the host's API surface are the boundary. The
 manifest should disclose `net` for review; the corrected gate can warn
@@ -488,9 +495,10 @@ pub mod functions {
 A request blocks until the whole response has arrived. Any status is a
 response, so a `404` is `Ok`. An `Err` is a request that got no response,
 as readable text, and `?` makes it the call's error in the script. The
-component imports `wasi:http` only when it calls these functions, and a
-crate that opens sockets, such as `reqwest`, `ureq` or `tokio`'s `net`,
-still does not work.
+component imports `wasi:http` only when it calls these functions. This HTTP
+adapter keeps working on RC5. A socket-based crate needs both a compatible
+WASI backend and a newer host ([TCP, UDP and DNS](#tcp-udp-and-dns)); socket
+support alone does not supply native TLS libraries or a threaded runtime.
 
 OctoSense's phase 3 runtime handles requests this way:
 
@@ -520,6 +528,80 @@ wrote bundle/fns/api-client.wasm: 108,794 bytes, a component that reaches the cl
 bundle/manifest.json:
   added "net" to capabilities: api-client imports wasi:http, the network
 ```
+
+### TCP, UDP and DNS
+
+**Release boundary:** ordinary `std::net` sockets require a forthcoming
+OctoSense build advertising the `wasm.sockets@1` host API. Released desktop
+RC5 does not provide it. This adds TCP streams/listeners, UDP datagrams and
+DNS through WASI, not privileged raw-IP sockets or native libraries.
+
+Rust's `wasm32-wasip2` standard library supplies the imports. There is no
+OctoSense socket wrapper to learn:
+
+| Rust API | Use |
+| --- | --- |
+| `std::net::TcpStream` | Connect and exchange TCP bytes |
+| `std::net::TcpListener` | Bind, listen and accept where the OS permits |
+| `std::net::UdpSocket` | Bind and exchange UDP datagrams |
+| `std::net::ToSocketAddrs` | Resolve a host and port into addresses |
+
+The complete [socket-client example](../sdk/rust/examples/socket-client/src/lib.rs)
+exports `tcp_echo(address, message)`, `udp_echo(address, message)` and
+`resolve(host, port)`. The echo clients talk to your own echo server, bound
+messages to 1,024 bytes and drop their socket on return. TCP uses 500 ms
+I/O timeouts. Rust’s WASI UDP backend does not implement `set_read_timeout`
+or `set_write_timeout`; the example instead uses nonblocking receive with a
+500 ms clock deadline and short sleeps, without spawning a thread. For example, from the app's Splash script:
+
+```splash
+host.request("wasm.resolve", {host: "localhost", port: 8080}, fn(r){
+    if r.is_ok { addresses = r.data } else { note = r.error }
+})
+```
+
+Build the crate using `tools/octo wasm build --app <app>`. For **any**
+`wasi:sockets` import, including DNS alone, the CLI adds this manifest
+fragment while preserving other requirements:
+
+```json
+{
+  "requires": ["wasm-components-v1", "host-api-v1"],
+  "capabilities": ["wasm", "net"],
+  "host_api": {"required": {"wasm.sockets": 1}}
+}
+```
+
+This is an ABI compatibility check, not permission to access an account or
+a new network allowlist. The existing `host-api-v1` format lets RC5 read a
+catalog containing the app while refusing this incompatible app at install.
+Do not mark `wasm.sockets` optional: its imports are needed to load the
+component. `wasm info` explains the requirement; `wasm build` promotes an
+optional ABI 1 declaration to required and refuses conflicting ABI versions.
+
+Socket apps also need socket-capable App Hub admission. This checkout's
+publisher-toolchain pin includes [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
+at `caf37ca0`. Older gates and already-generated release workflows can still
+refuse them. Regenerate the app's workflow with
+`tools/octo publish-github <app> --replace`; do not remove the compatibility
+requirement to make an old gate pass. Admission does not supply a compatible
+released host.
+
+TCP/UDP do not automatically encrypt traffic. Select a WASI-compatible TLS
+or protocol implementation when needed, keep buffers bounded, set operation
+timeouts and release sockets promptly. The host retains resource limits,
+cancellation and teardown responsibility; sockets cannot bypass OS network
+restrictions. Supporting sockets does not make a native TLS library, every
+`tokio` feature, or every third-party network crate portable. For ordinary
+HTTPS APIs, `octosense_component::http` remains the simpler RC5-compatible
+route.
+
+**SDK validation:** `cargo test --locked --workspace` in `sdk/rust` compiles
+the example into a real component, then checks TCP and UDP round trips,
+`localhost` name resolution, TCP closure on return, a silent UDP peer and failure when the
+harness does not enable sockets. This tests the SDK transport in Wasmtime
+49. It is not acceptance of an installed app, public-network DNS, a phone,
+production quotas or cancellation; those need host-specific tests.
 
 ### Host services
 
@@ -586,7 +668,8 @@ reports `none of the 6 crates it links is known not to build or run in a compone
 | The crate | Why | Instead |
 | --- | --- | --- |
 | C libraries: `openssl-sys`, `libsqlite3-sys`, and crates that compile C with `cc` or `cmake` | They need a C compiler for WASI, such as wasi-sdk's clang | A pure-Rust crate or feature: RustCrypto's `sha2`, `hmac` or `aes-gcm` for cryptography; files in the app's storage, or the script's storage, for data |
-| The network: `reqwest`, `hyper`, `ureq`, `curl`, `mio`, `socket2`, `tungstenite`, `native-tls` | They open sockets, and a component has none | `octosense_component::http`, with network use disclosed ([Network](#network)), or fetch with `net` in Splash, then pass the data in |
+| Socket-based crates: `reqwest`, `hyper`, `ureq`, `mio`, `socket2`, `tungstenite` | Their selected networking/TLS backend and features may not support WASI; `doctor` warns instead of rejecting the name | Build for `wasm32-wasip2`, test on a host with `wasm.sockets@1`, or use the RC5-compatible HTTP adapter ([Network](#network)) |
+| `native-tls`, `curl`, `curl-sys`, `isahc` | Depend on native TLS or libcurl | `octosense_component::http`, or a WASI-compatible pure-Rust implementation |
 | Threads: `rayon` | `wasm32-wasip2` has no threads | Plain iterators, or the crate without its parallel feature |
 | `tokio` with `rt-multi-thread`, `net`, `fs`, `process` or `signal` | They need threads, the network or the device | Plain functions: a component's functions are ordinary calls, with no async runtime |
 | JavaScript bindings: `wasm-bindgen`, `js-sys`, `web-sys` | A component has no JavaScript | The crate without its `js` or `wasm-bindgen` feature |
@@ -621,9 +704,9 @@ after its `[ok]` lines:
 
 The table holds only what this repository's docs say a store app may use.
 Engine services such as `photo`, `pdf` or `word` are for system apps, so
-`doctor` offers none of them. A crate that opens network sockets, such as
-`reqwest` or `ureq`, is a failure rather than a hint: `doctor` says that a
-component reaches the network with `octosense_component::http` instead
+`doctor` offers none of them. A socket-based crate such as `reqwest` or
+`ureq` now produces a compatibility warning, not an automatic failure.
+Its features, target build and runtime tests determine whether it works
 ([What cannot build or run](#what-cannot-build-or-run), [Network](#network)).
 
 ### The crates it is built from
@@ -704,7 +787,7 @@ those two are:
 | `[refused] functions: fns/text-tools.wasm is a WebAssembly component; the manifest must require wasm-components-v1` | Add it to `requires`, or run `tools/octo wasm build`. |
 | Older gate refuses omitted `storage` disclosure | Use the compatible 1.11 gate; disclose file use for review. Bounded private storage still applies. |
 | Older gate refuses omitted `net` disclosure | Use the compatible 1.11 gate; disclose network use. No runtime host allowlist is inferred ([Network](#network)). |
-| `[refused] contents-invalid (fns/netprobe.wasm): the component imports wasi:sockets/network@0.2.9; a component may import only wasi:cli, wasi:clocks, wasi:filesystem, wasi:http, wasi:io, wasi:random and octosense:host` | Remove what opens sockets ([What cannot build or run](#what-cannot-build-or-run)). |
+| `[refused] contents-invalid (fns/netprobe.wasm): the component imports wasi:sockets/network@0.2.9; a component may import only wasi:cli, wasi:clocks, wasi:filesystem, wasi:http, wasi:io, wasi:random and octosense:host` | This is an older gate. Use a socket-capable gate and host, with `wasm.sockets@1` required, or keep the RC5-compatible HTTP route ([TCP, UDP and DNS](#tcp-udp-and-dns)). |
 
 The rules for every file in `fns/` (its name, at most 8 files, the 8 MiB
 bundle) are the same as for modules ([Build it](#build-it)).

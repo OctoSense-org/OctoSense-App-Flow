@@ -40,7 +40,7 @@
 //! time, with what to use instead.
 //!
 //! The component runs in the OctoSense `wasm` service. It has clocks and
-//! randomness, and with the app's `storage` grant, the app's own folder as
+//! randomness, and the app's bounded private folder as
 //! `/` through `std::fs`. Its stdout and stderr ([`log`]) become log lines.
 //! ADR 0014's phase 3 adds two more, each imported only by a component that
 //! calls it:
@@ -50,7 +50,11 @@
 //! - [`host`]: the host services the app is granted, as its script calls
 //!   them with `host.request`.
 //!
-//! It has no sockets, environment or other host access.
+//! Ordinary `std::net` TCP/UDP/DNS needs a host advertising `wasm.sockets@1`;
+//! released RC5 does not provide it. `tools/octo wasm build` records that
+//! required host ABI automatically when the component imports `wasi:sockets`.
+//! There is no separate SDK socket wrapper. The environment is empty, and
+//! native libraries or arbitrary OS APIs remain unavailable.
 
 pub mod host;
 pub mod http;
