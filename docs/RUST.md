@@ -36,7 +36,7 @@ its [public-store acceptance](https://github.com/ymote/octosense-repo-radar/blob
 covered live GitHub requests through `octosense_component::http`, native
 charts, and a watchlist the component keeps in its own storage across a
 restart. Its sealed component is ordinary Rust over `serde`, `serde_json`,
-`semver`, `time` and the SDK, 496 KB built for size; each call makes at most
+`semver`, `time` and the SDK, 496 KB when built for size; each call makes at most
 one request, with a 3 s request timeout under the 10 s call deadline, and
 parses at most 2 MiB of response, since the SDK buffers the body. It
 requires `wasm-components-v1` and `host-api-v1` with
@@ -354,7 +354,7 @@ An agent tool maps to a component's function as to a module's, with
   That output belongs to the older gate; see
   [What the gate checks](#what-the-gate-checks) for the current policy.
 - Desktop RC5 and RC6 include phases 2 and 3 with working HTTPS; RC4 runs
-  components whose functions make no request. Test your app in RC6 (or RC5),
+  only components whose functions make no requests. Test your app in RC6 (or RC5),
   with its real imports and public host-service calls; the SDK's local
   fixtures do not establish your app's behavior or provider authorization.
   `card-host` cannot drive the functions of an app whose manifest requires
