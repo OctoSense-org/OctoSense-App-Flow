@@ -216,6 +216,7 @@ Agent 工具映射到组件函数的方式与映射到模块函数相同，用 `
 ### 6. 测试
 
 - 像第 3 步那样用 `cargo test` 以本机方式测试逻辑。
+- `tools/octo wasm call <function> [JSON]` 借助 OctoSense 的 `wasm_call` 示例（OctoSense #455；`main` 自 `cb241350` 起包含，桌面 RC4 也包含），在命令行调用已构建组件的一个函数。它需要一个 OctoSense 检出目录（由 `OCTOSENSE_REPO` 指定，或者是与本仓库并列的 `OctoSense` 目录），首次运行会编译运行时。每次调用都得到一个新实例，`octosense:host` 调用会以 `needs a shell` 失败；其余行为与在 Shell 中相同。已用本页的模板验证：`count '{"text":"one two\nthree"}'` → `{"lines": 2, "words": 3}`。
 - `tools/octo run` 在 `card-host` 中启动应用。`card-host` 没有 `wasm` 服务，每次调用都返回 `no service answers "wasm" on this device`。用它检查布局，以及应用在没有函数时显示什么。App Hub `main` 的 `card-host` 是否接受这份清单属于**未验证**（见页首的表格）。
 - `tools/octo check` 运行当前 App Hub 准入检查，接受带 `wasm-components-v1` 的受支持组件。历史 #186 之前的运行在写入摘要时停止：`hub: app dev.example.texttools needs a newer host: wasm-components-v1`。这条输出属于旧准入检查；当前策略见[准入检查查看什么](#准入检查查看什么)。
 - 桌面 RC5 与 RC6 包含第 2、3 阶段，且 HTTPS 可用；RC4 只能运行函数不发请求的组件。请在 RC6（或 RC5）中测试应用实际使用的导入与公开宿主服务；SDK 本地测试示例不代表你的应用行为或提供商授权已验证。对清单要求 `wasm-components-v1` 的应用，`card-host` 无法驱动其函数；对要求 `host-api-v1` 的应用，`card-host` 会直接拒绝。两者都请在兼容发布版本中、在一个独立的 profile 里用 Shell 的 Makepad instrument 驱动：Repo Radar 的[原生验收](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md)把这条路径写成了脚本，从商店安装一直到重启，并保留一份把宿主、Hub、目录和所测源码绑定在一起的回执。绝不要为了让预览通过而删除 `requires` 条目。较早的模块演练（[测试](#测试)第 2 到 9 步）保留其自己的记录范围。

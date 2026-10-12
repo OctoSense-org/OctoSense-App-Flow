@@ -343,6 +343,14 @@ An agent tool maps to a component's function as to a module's, with
 ### 6. Test it
 
 - Test the logic natively with `cargo test`, as in step 3.
+- `tools/octo wasm call <function> [JSON]` calls one function of the built
+  component from the command line, through OctoSense's `wasm_call` example
+  (OctoSense #455; on `main` from `cb241350` and in desktop RC4). It needs an
+  OctoSense checkout (`OCTOSENSE_REPO`, or `OctoSense` beside this
+  repository) whose first run compiles the runtime. Each call gets a fresh
+  instance, and `octosense:host` calls fail with `needs a shell`; the rest
+  runs as in the shell. Verified with this page's template:
+  `count '{"text":"one two\nthree"}'` → `{"lines": 2, "words": 3}`.
 - `tools/octo run` starts the app in `card-host`, which has no `wasm`
   service, so every call answers `no service answers "wasm" on this device`.
   Use it for the layout and for what the app shows without its functions.

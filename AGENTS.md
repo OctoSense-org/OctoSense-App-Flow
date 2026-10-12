@@ -151,6 +151,8 @@ says who runs each one and when.
     state owned by the component. Compatible release and actual app
     acceptance remain separate.
     Preserve app/account scope, quotas, consent and native reviews.
+    `tools/octo wasm call` runs one function of a built component from the
+    command line through an OctoSense checkout; it is not a shell.
   - `card-host` answers every call with
     `no service answers "wasm" on this device`, and refuses an app that
     requires `host-api-v1`. An app that requires `wasm-components-v1` or
