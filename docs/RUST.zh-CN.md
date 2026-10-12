@@ -11,6 +11,8 @@
 
 **[桌面 RC6](../README.zh-CN.md#下载兼容-shell) 已提供套接字支持。** 要求 `wasm.sockets@1` 的应用可以使用普通 TCP、UDP 和 DNS；RC5 不提供该功能。每个应用仍须在其声明的平台上测试。见 [TCP、UDP 和 DNS](#tcpudp-和-dns)。此变更不增加原生库或特权原始 IP 套接字访问。
 
+**RC5：组件 HTTPS 与图表。** [桌面 RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) 已发布，源码为 `83d356c2`（2026 年 10 月 11 日）。它是第一个组件 HTTPS 请求能正常工作的发布版本：RC4 在处理第一次 `wasi:http` 请求、选择 TLS provider 时会 panic（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）。它还注册了原生 D3 图表，应用可用 `charts.d3@1` 声明对它们的依赖（[#470](https://github.com/OctoSense-org/OctoSense/pull/470)）。[Repo Radar](https://github.com/ymote/octosense-repo-radar) 是第一个从官方公开目录安装的组件应用：在公开的 RC5 Mac 安装包上，其[公开商店验收](https://github.com/ymote/octosense-repo-radar/blob/main/review/acceptance-public-store-0.1.2.json)通过了 93 项原生检查，覆盖经 `octosense_component::http` 向 GitHub 发出的真实请求、原生图表，以及组件保存在自己存储中、重启后仍在的关注列表。其封存的组件是基于 `serde`、`serde_json`、`semver`、`time` 和 SDK 的普通 Rust，按体积优化后为 496 KB；每次调用最多发出一个请求，请求超时 3 秒，处于 10 秒的调用期限之内，最多解析 2 MiB 响应，因为 SDK 会缓冲整个响应体。它要求 `wasm-components-v1` 与 `host-api-v1`，并声明 `host_api.required: {"charts.d3": 1}`，因此 RC4 拒绝安装它。RC6 保留这一切，并新增套接字（见上文）。
+
 **RC4 历史基线，保持不变。** [桌面 RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4) 已发布，源码为 `9266b008`，包含组件加载、HTTP、公开宿主服务导入与签名目录中的共享组件。它使用 App Hub 契约 1.11，`capabilities` 与 `network.hosts` 披露用途，不作为执行开关。`requires`、受支持的导入、完整性、配额、应用与账户 scope、实际设备同意、原生写入审核及应用间共享检查继续生效。最终 Mac 归档包与通过 11/11 项 Store/组件检查的候选包字节一致；测试使用真实 GitHub 证明与经管理员证明的私有演练目录，不代表官方公开目录组件安装、真实模型或 Windows/Linux 界面验收。OnePlus 6 组件检查使用隔离的源码测试包，没有升级 Home。你的确切应用仍需单独验收。RC2 与 Home beta.2 只包含核心模块；下方历史观察记录保留原有范围。
 
 | | 核心模块（ADR 0011） | 组件（ADR 0014） |
@@ -22,7 +24,7 @@
 | App Hub 的准入检查（`hub check`） | 从契约 1.7 起接受 | 当前源码接受带有 `wasm-components-v1` 的受支持组件；1.11 策略把能力族声明视为披露。 |
 | 当前源码（macOS、Windows、Linux、Android 和 OpenHarmony） | 包含；OpenHarmony 使用 Pulley | 包含第 3 阶段适配器与逐应用共享组件加载；不含 iOS。源码包含不等于真机验收。 |
 | `card-host` | 接受应用；调用返回 `no service answers "wasm" on this device` | 同样没有 `wasm` 服务。清单通过准入不代表组件能在其中运行。 |
-| 发布版本 | 桌面 RC4 的 macOS/Windows/Linux 包；桌面 RC2 的 macOS/Linux 包及 Home beta.2 也包含 | 桌面 RC4 的 macOS/Windows/Linux 包包含；最终 Mac 归档包验收见上文。Home beta.2 不含组件。 |
+| 发布版本 | 桌面 RC4、RC5 与 RC6 的 macOS/Windows/Linux 包；桌面 RC2 的 macOS/Linux 包及 Home beta.2 也包含 | 桌面 RC4、RC5 与 RC6 的 macOS/Windows/Linux 包包含；RC5 是第一个组件 HTTPS 可用、第一个提供 `charts.d3@1`、也是第一个有组件应用从公开目录安装的版本（见上文）；RC6 新增套接字。Home beta.2 不含组件。 |
 
 下方命令示例在声明策略修正前，曾在 macOS（Apple 芯片）上用 Rust 1.97.1 运行，标注为**未验证**的除外。历史准入输出只证明当时版本行为，不是当前必须取得能力族授权的要求。示例使用 `tools/octo new` 在 `~/apps/my-app` 创建的应用（见 [QUICKSTART §3](QUICKSTART.zh-CN.md#3-创建应用)），id 为 `dev.example.texttools`。
 
@@ -195,7 +197,7 @@ tools/octo wasm info bundle/fns/text-tools.wasm
 
 ### 5. 在应用中调用
 
-RC4 已实现此组件调用路径。下方既有 SDK 示例保留原有验证范围；须在已安装宿主中单独验证你的确切应用。
+RC4、RC5 与 RC6 已实现此组件调用路径。下方既有 SDK 示例保留原有验证范围；须在已安装宿主中单独验证你的确切应用。
 
 ```splash
 host.request("wasm.count", {text: "one two\nthree"}, fn(r){
@@ -216,7 +218,7 @@ Agent 工具映射到组件函数的方式与映射到模块函数相同，用 `
 - 像第 3 步那样用 `cargo test` 以本机方式测试逻辑。
 - `tools/octo run` 在 `card-host` 中启动应用。`card-host` 没有 `wasm` 服务，每次调用都返回 `no service answers "wasm" on this device`。用它检查布局，以及应用在没有函数时显示什么。App Hub `main` 的 `card-host` 是否接受这份清单属于**未验证**（见页首的表格）。
 - `tools/octo check` 运行当前 App Hub 准入检查，接受带 `wasm-components-v1` 的受支持组件。历史 #186 之前的运行在写入摘要时停止：`hub: app dev.example.texttools needs a newer host: wasm-components-v1`。这条输出属于旧准入检查；当前策略见[准入检查查看什么](#准入检查查看什么)。
-- 桌面 RC4 包含第 2、3 阶段。请在该宿主中测试应用实际使用的导入与公开宿主服务；SDK 本地测试示例不代表你的应用行为或提供商授权已验证。较早的模块演练（[测试](#测试)第 2 到 9 步）保留其自己的记录范围。
+- 桌面 RC5 与 RC6 包含第 2、3 阶段，且 HTTPS 可用；RC4 只能运行函数不发请求的组件。请在 RC6（或 RC5）中测试应用实际使用的导入与公开宿主服务；SDK 本地测试示例不代表你的应用行为或提供商授权已验证。对清单要求 `wasm-components-v1` 的应用，`card-host` 无法驱动其函数；对要求 `host-api-v1` 的应用，`card-host` 会直接拒绝。两者都请在兼容发布版本中、在一个独立的 profile 里用 Shell 的 Makepad instrument 驱动：Repo Radar 的[原生验收](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md)把这条路径写成了脚本，从商店安装一直到重启，并保留一份把宿主、Hub、目录和所测源码绑定在一起的回执。绝不要为了让预览通过而删除 `requires` 条目。较早的模块演练（[测试](#测试)第 2 到 9 步）保留其自己的记录范围。
 
 SDK 自己的测试用普通的 cargo 为 `wasm32-wasip2` 构建示例和模板，像 ADR 0014 的运行时一样在 Wasmtime 49 中以 WASI 0.2 加载它们，并调用每个函数。对第 3 阶段，测试像 OctoSense 的运行时一样链接 `wasi:http`（`wasmtime-wasi-http` 49）和 `octosense:host`，并照搬它的钩子：`http-client` 示例不经任何授权，按地址和按名称向本机的 HTTP/1.1 服务器发请求，发往从不应答的服务器的请求随这次调用结束；`host-services` 示例调用模拟的宿主服务。在 `sdk/rust/` 中运行：
 
@@ -291,7 +293,7 @@ ADR 0014 给组件提供下列 WASI 0.2 接口；第 3 阶段再加上 `octosens
 
 ### 网络
 
-**验证范围**：SDK 测试在 Wasmtime 49 中向本机服务器发出请求，不证明已安装应用能调用真实服务。OctoSense 源码包含第 3 阶段；应用验收须用兼容构建。
+**验证范围**：SDK 测试在 Wasmtime 49 中向本机服务器发出请求。已安装应用能调用真实服务这一点，由 [Repo Radar](https://github.com/ymote/octosense-repo-radar) 在桌面 RC5 上证实：其组件经此适配器通过 HTTPS 查询 `api.github.com`，见本页开头链接的公开商店验收。RC4 不是组件 HTTPS 的可用基线（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）；应用验收须用 RC5 或更新的兼容构建。
 
 HTTP 使用 `wasi:http`，可以访问任何主机。[TCP、UDP 和 DNS](#tcpudp-和-dns) 是另一个需要较新宿主的路径。按 OctoSense 2026 年 10 月 8 日的裁定，应用的网络声明（`net`、`network.hosts`）在安装时展示，运行时不强制：边界是操作系统和宿主的 API 表面。清单应披露 `net` 供审核；修正后的准入检查可以对遗漏披露警告，但不会因此拒绝：
 

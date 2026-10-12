@@ -25,6 +25,24 @@ RC5 does not provide it. Test each app on its claimed platforms.
 See [TCP, UDP and DNS](#tcp-udp-and-dns).
 No native library or privileged raw-IP socket access is added.
 
+**RC5: component HTTPS and charts.** [Desktop RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) is published at
+source `83d356c2` (11 October 2026). It is the first release where a
+component's HTTPS request works: RC4 panicked while choosing a TLS provider
+on the first `wasi:http` request ([#471](https://github.com/OctoSense-org/OctoSense/pull/471)). It also registers the
+native D3 charts an app can require with `charts.d3@1`
+([#470](https://github.com/OctoSense-org/OctoSense/pull/470)). [Repo Radar](https://github.com/ymote/octosense-repo-radar) is the first component app
+installed from the official public catalog: on the public RC5 Mac package,
+its [public-store acceptance](https://github.com/ymote/octosense-repo-radar/blob/main/review/acceptance-public-store-0.1.2.json) passed 93 native checks that
+covered live GitHub requests through `octosense_component::http`, native
+charts, and a watchlist the component keeps in its own storage across a
+restart. Its sealed component is ordinary Rust over `serde`, `serde_json`,
+`semver`, `time` and the SDK, 496 KB when built for size; each call makes at most
+one request, with a 3 s request timeout under the 10 s call deadline, and
+parses at most 2 MiB of response, since the SDK buffers the body. It
+requires `wasm-components-v1` and `host-api-v1` with
+`host_api.required: {"charts.d3": 1}`, so RC4 refuses to install it. RC6 keeps all of this and adds sockets
+(above).
+
 **Historical RC4 baseline, unchanged.** [Desktop RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)
 is published at source `9266b008`, with component loading, HTTP, public
 host-service imports and shared catalog components. Its App Hub contract 1.11
@@ -48,7 +66,7 @@ retain their original scope.
 | App Hub's gate (`hub check`) | Admits it from contract 1.7 | Current source admits supported components with `wasm-components-v1`; the 1.11 policy treats family declarations as disclosures. |
 | Current source (macOS, Windows, Linux, Android and OpenHarmony) | Included; OpenHarmony uses Pulley | Included, with phase 3 adapters and per-app shared-component loading; iOS excluded. Source inclusion does not establish device acceptance. |
 | `card-host` | Admits the app; calls answer `no service answers "wasm" on this device` | Also has no `wasm` service. Manifest admission does not make a component runnable there. |
-| Releases | Desktop RC4 on macOS/Windows/Linux; also desktop RC2 on macOS/Linux and Home beta.2 | Desktop RC4 includes it on macOS/Windows/Linux; final Mac archive acceptance is linked above. Home beta.2 has no components. |
+| Releases | Desktop RC4, RC5 and RC6 on macOS/Windows/Linux; also desktop RC2 on macOS/Linux and Home beta.2 | Desktop RC4, RC5 and RC6 include it on macOS/Windows/Linux; RC5 is the first whose component HTTPS works, the first with `charts.d3@1`, and the first with a component app installed from the public catalog (above); RC6 adds sockets. Home beta.2 has no components. |
 
 The recorded command examples below were run on macOS (Apple silicon)
 with Rust 1.97.1 before the declaration-policy correction, unless marked
@@ -296,8 +314,9 @@ always reads from the file itself.
 
 ### 5. Call it from the app
 
-RC4 implements this component call path. The recorded SDK examples below
-retain their own scope; separately test your exact app in the installed host.
+RC4, RC5 and RC6 implement this component call path. The recorded SDK examples
+below retain their own scope; separately test your exact app in the installed
+host.
 
 ```splash
 host.request("wasm.count", {text: "one two\nthree"}, fn(r){
@@ -334,10 +353,19 @@ An agent tool maps to a component's function as to a module's, with
   at the stamp: `hub: app dev.example.texttools needs a newer host: wasm-components-v1`.
   That output belongs to the older gate; see
   [What the gate checks](#what-the-gate-checks) for the current policy.
-- Desktop RC4 includes phases 2 and 3. Test your app in that host, with its
-  real imports and public host-service calls; the SDK's local fixtures do not
-  establish your app's behavior or provider authorization. The older module
-  rehearsal ([Test it](#test-it), steps 2 to 9) has its own recorded scope.
+- Desktop RC5 and RC6 include phases 2 and 3 with working HTTPS; RC4 runs
+  only components whose functions make no requests. Test your app in RC6 (or RC5),
+  with its real imports and public host-service calls; the SDK's local
+  fixtures do not establish your app's behavior or provider authorization.
+  `card-host` cannot drive the functions of an app whose manifest requires
+  `wasm-components-v1`, and refuses one that requires `host-api-v1`, so
+  drive either in the compatible release with the shell's Makepad
+  instrument, in a profile of its own: Repo Radar's
+  [native acceptance](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md) scripts that path, from the store install
+  to a restart, and keeps a receipt that binds the host, the Hub, the catalog
+  and the source it tested. Never remove a `requires` entry to make a preview
+  pass. The older module rehearsal ([Test it](#test-it), steps 2 to 9) has
+  its own recorded scope.
 
 The SDK's own tests build its examples and the template with plain cargo for
 `wasm32-wasip2`, load them in Wasmtime 49 with WASI 0.2 as ADR 0014's
@@ -443,8 +471,11 @@ shell, test the exact app and compatible build separately.
 ### Network
 
 **Validation scope:** the SDK tests send requests to a local server in
-Wasmtime 49; they do not prove provider calls from an installed app.
-OctoSense source includes phase 3; app acceptance needs a compatible build.
+Wasmtime 49. Provider calls from an installed app are established by
+[Repo Radar](https://github.com/ymote/octosense-repo-radar) on desktop RC5: its component queries `api.github.com`
+over HTTPS through this adapter, in the public-store acceptance linked at the
+top of this page. RC4 is not a working baseline for component HTTPS
+([#471](https://github.com/OctoSense-org/OctoSense/pull/471)); app acceptance needs RC5 or a later compatible build.
 
 For HTTP, a component uses `wasi:http` and can reach any host.
 [TCP, UDP and DNS](#tcp-udp-and-dns) are a separate newer-host path. Under OctoSense's ruling of 8 October 2026, an app's network
