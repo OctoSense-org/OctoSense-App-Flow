@@ -2,7 +2,7 @@
 """Build and exercise the pinned publisher; no network calls by guests or publication.
 
 Prepare the Hub checkout and its runtime siblings first (see CI). The SDK's
-real HTTP, host-service and filesystem components are built from this checkout.
+real HTTP, socket, host-service and filesystem components are built from this checkout.
 The one-pixel image is structural test data, never an app screenshot or UX proof.
 """
 import argparse
@@ -88,18 +88,28 @@ def main():
     components = args.component_target_dir.resolve()
     subprocess.run(['cargo', 'build', '--locked', '--release', '--target', 'wasm32-wasip2',
                     '--target-dir', str(components), '-p', 'http-client', '-p', 'host-services',
-                    '-p', 'markdown-tools'], cwd=ROOT / 'sdk/rust', check=True)
+                    '-p', 'markdown-tools', '-p', 'socket-client'], cwd=ROOT / 'sdk/rust', check=True)
     checks = []
     with tempfile.TemporaryDirectory(prefix='publisher-toolchain-') as temp:
         for name, package in [('http_client', 'wasi:http/'),
                               ('host_services', 'octosense:host/'),
-                              ('markdown_tools', 'wasi:filesystem/')]:
+                              ('markdown_tools', 'wasi:filesystem/'),
+                              ('socket_client', 'wasi:sockets/')]:
             root = Path(temp) / name
             wasm = components / 'wasm32-wasip2/release' / (name + '.wasm')
             info = json.loads(run(hub, 'component-info', wasm))
             assert info['kind'] == 'component' and any(
                 value.startswith(package) for value in info['imports']), info
             bundle = bundle_at(root, wasm.read_bytes())
+            if name == 'socket_client':
+                denied = check(hub, bundle, success=False)
+                assert any('wasm.sockets@1' in f['detail'] for f in denied['findings']), denied
+                manifest_file = bundle / 'manifest.json'
+                manifest = json.loads(manifest_file.read_text())
+                manifest['requires'].append('host-api-v1')
+                manifest['host_api'] = {'required': {'wasm.sockets': 1}}
+                write_json(manifest_file, manifest)
+                checks.append('socket_client: missing socket host ABI refused')
             report = check(hub, bundle)
             assert any(f['check'] == 'functions' for f in report['findings']), report
             checks.append(name + ': bundled imports accepted without declarations')
@@ -123,7 +133,7 @@ def main():
 
             manifest_file = bundle / 'manifest.json'
             manifest = json.loads(manifest_file.read_text())
-            manifest['requires'] = []
+            manifest['requires'] = ['host-api-v1'] if name == 'socket_client' else []
             write_json(manifest_file, manifest)
             denied = check(hub, bundle, success=False)
             assert any('must require wasm-components-v1' in f['detail'] for f in denied['findings']), denied
@@ -131,6 +141,8 @@ def main():
             manifest['components'] = [{'as': 'shared_probe', 'id': component['id'],
                                        'version': component['version'], 'blake3': component['wasm_blake3']}]
             manifest['requires'] = ['wasm-components-v1', 'wasm-shared-components-v1']
+            if name == 'socket_client':
+                manifest['requires'].append('host-api-v1')
             write_json(manifest_file, manifest)
             shared_app = check(hub, bundle)
             assert any(f['check'] == 'components' and 'not resolved' in f['detail']
@@ -144,6 +156,8 @@ def main():
             sealed = json.loads(subject.read_text())
             assert set(manifest['requires']) <= set(sealed['requires']), sealed
             assert sealed['components'] == manifest['components'], sealed
+            if name == 'socket_client':
+                assert sealed['host_api']['required'] == {'wasm.sockets': 1}, sealed
             denied = run(hub, 'publisher-verify', bundle, success=False)
             assert 'attestation' in denied.lower() or 'proof' in denied.lower(), denied
             pack = root / 'app.bundle.pack.json'
@@ -151,17 +165,17 @@ def main():
             assert not pack.exists(), 'an unattested app must not produce a release pack'
             checks.append(name + ': ABI required; shared pins preserved; unattested pack refused')
 
-        # The genuine negative component imports wasi:sockets, outside the
-        # host's supported component ABI. Broadening disclosures must not
-        # accidentally admit it or malformed component bytes.
+        # The genuine socket fixture must also require the host API. Admitting
+        # its import package must not admit an incompatible manifest or
+        # malformed component bytes.
         socket = source / 'crates/app-hub/tests/fixtures/netprobe.component.wasm'
         bundle = bundle_at(Path(temp) / 'sockets', socket.read_bytes())
         denied = check(hub, bundle, success=False)
-        assert any('wasi:sockets' in f['detail'] for f in denied['findings']), denied
+        assert any('wasm.sockets@1' in f['detail'] for f in denied['findings']), denied
         (bundle / 'fns/probe.wasm').write_bytes(b'\0asm\x0d\x00\x01\x00\xff')
         denied = check(hub, bundle, success=False)
         assert any(f['check'] == 'functions' for f in denied['findings']), denied
-        checks.append('unsupported sockets and malformed components refused')
+        checks.append('socket imports without required host ABI and malformed components refused')
     print(json.dumps({'publisher_revision': head, 'checks': checks, 'passed': len(checks),
                       'scope': 'structural admission and preparation; no catalog resolution, attestation, publication or guest execution'},
                      indent=2))

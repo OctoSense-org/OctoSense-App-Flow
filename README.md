@@ -94,41 +94,53 @@ architecture; published repositories above own the current release bytes.
 
 ### Compatible shell download
 
-[**Desktop 0.1.0-rc.4 is available**](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4), published 2026-10-10 from
-source [`9266b008`](https://github.com/OctoSense-org/OctoSense/commit/9266b0083544d86bd7636543b5ff60c61b26460f).
-It includes GitHub-attested apps, the public v2 catalog, Host API v1,
-shared Wasm components and the corrected declaration-only API policy.
-Capability names and `network.hosts` describe expected use; omitted declarations
-do not deny public APIs. App identity, private storage, resource limits,
-account/device consent and reviewed tool access remain enforced
-([policy](docs/CAPABILITIES.md#current-source-policy-and-release-boundary)).
-The OS APIs introduced in RC2 remain subject to their platform limits
-([Host API families](docs/HOST-API-FAMILIES.md)).
+**[Desktop 0.1.0-rc.6 is published](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.6)**
+(2026-10-11), from source [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)
+and the [official release build](https://github.com/OctoSense-org/OctoSense/actions/runs/38125407028).
 
-| Platform | Download |
+RC6 adds ordinary TCP streams/listeners, UDP datagrams and DNS for Rust/WASI
+components through `wasm.sockets@1` ([Rust sockets](docs/RUST.md#tcp-udp-and-dns)).
+It also adds the native OctoSense Updates app with Stable, Release candidate
+and Preview channels, verified downloads and an explicit installer handoff.
+RC5 has no updater: install RC6 manually once before using it for later updates.
+The updater verifies GitHub's attestation on each desktop checksum manifest;
+this does not provide a macOS Developer ID signature or Windows Authenticode.
+
+| Platform | RC6 downloads |
 | --- | --- |
-| macOS Apple silicon | [DMG](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_aarch64.dmg) or [app ZIP](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_macos_aarch64.app.zip) |
-| Windows x64 | [Installer](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_x64-setup.exe) |
-| Linux x86_64 | [Debian package](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_amd64.deb) or [AppImage](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/octosense_0.1.0-rc.4_x86_64.AppImage) |
+| macOS Apple silicon | [DMG](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_aarch64.dmg) or [app ZIP](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_macos_aarch64.app.zip) |
+| Windows x64 | [Installer](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_x64-setup.exe) |
+| Linux x86_64 | [Debian package](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_amd64.deb) or [AppImage](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/octosense_0.1.0-rc.6_x86_64.AppImage) |
 
-Check downloads against [SHA256SUMS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/SHA256SUMS) and read the release's
-platform instructions. The macOS packages have only a linker ad-hoc signature,
-**no Developer ID signature or notarization**; Windows has **no publisher
-signature**. The [release workflow](https://github.com/OctoSense-org/OctoSense/actions/runs/38065627444)
-built the packages; its [macOS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_macos-arm64.receipt.json),
-[Windows](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_windows-x64.receipt.json) and
-[Linux](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.4/OctoSense_0.1.0-rc.4_linux-x64.receipt.json) receipts record source
-and package identities. All nine published assets passed checksum verification.
+The release includes [SHA256SUMS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/SHA256SUMS), its
+[GitHub attestation](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/SHA256SUMS.sigstore.json) and
+[macOS](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_macos-arm64.receipt.json),
+[Windows](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_windows-x64.receipt.json) and
+[Linux](https://github.com/OctoSense-org/OctoSense/releases/download/desktop-v0.1.0-rc.6/OctoSense_0.1.0-rc.6_linux-x64.receipt.json) package receipts.
+All eight package/receipt files passed checksum verification. The exact RC6
+updater verifier accepted the [GitHub signature](https://github.com/OctoSense-org/OctoSense/actions/runs/38137543497)
+and rejected altered checksums and a wrong release tag. The public Mac download
+passed updater checks (RC/Preview: up to date; Stable: no release yet), plus
+public App Hub installation, opening and restart persistence for Repo Radar.
+Linux passed six isolated startup checks; Windows passed static package checks.
+Windows GUI execution, native installer handoff/replacement and full app
+functionality were not tested. App Hub's Install action remains below its
+permission review. The Mac package is not Developer ID signed or notarized;
+the Windows installer is not Authenticode signed.
 
-The final Mac ZIP bytes match the candidate that passed **11/11** App Hub/component
-checks: installation, cold restart, component calls and separate app state/files
-([archive acceptance and limits](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)). This used real GitHub publisher proofs
-and a private administrator-attested dry-run catalog; it did not publish or
-install those components through the official public catalog. Installed
-Windows/Linux GUI acceptance and live-provider effects remain **unverified**.
-Android Home is a separate release; Home beta.2 is unchanged by this desktop
-release. To build RC4 yourself, follow the
-[pinned setup guide](https://github.com/OctoSense-org/OctoSense/blob/9266b0083544d86bd7636543b5ff60c61b26460f/README.md#set-up).
+Android Home is a separate release; this desktop release does not upgrade it.
+To inspect or build RC6, use its [pinned setup guide](https://github.com/OctoSense-org/OctoSense/blob/f9f6fea90b52182790cb2641fd0145c425af4d84/README.md#set-up).
+
+GitHub-attested apps, the public v2 catalog, Host API v1 and shared Wasm components
+remain part of the host. Capability names and `network.hosts` describe expected
+use; omitted declarations do not deny public APIs. Required ABI/API versions,
+app identity, private storage, resource limits, account/device consent and
+reviewed tool access still apply ([policy](docs/CAPABILITIES.md#current-source-policy-and-release-boundary)).
+The OS APIs introduced in RC2 retain their [platform limits](docs/HOST-API-FAMILIES.md).
+
+**Historical evidence.** [RC4's release notes](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4)
+record its nine checked assets and 11/11 Mac component checks against a private
+administrator-attested rehearsal catalog. Those results apply to RC4; the RC6 checks above are separate.
 
 For these samples, use a Mac: **App Hub → Search → exact app ID → Get →
 Install → Open**. Review the permissions before Install; **Library** offers
@@ -213,9 +225,9 @@ Use `main` of each repository.
 
 | Piece | State |
 | --- | --- |
-| The gate (`hub`) | App Hub `main`, app contract 1.11.0 (also pinned by RC4), which validates usage declarations for the connected-account capabilities `auth`, `github`, `gmail` and `gcalendar`, the [Host API v1](docs/HOST-API-V1.md) declarations, the `wasm` capability and RC2's `files`, `audio` and `device_calendar`. |
+| The gate (`hub`) | [Pinned App Hub `38635915`](https://github.com/OctoSense-org/OctoSense-App-Hub/tree/386359153ed6377b5f047bd9ed2767a6a2ac2bc7), app contract **1.12.0**, which validates usage declarations for the connected-account capabilities `auth`, `github`, `gmail` and `gcalendar`, the [Host API v1](docs/HOST-API-V1.md) declarations, the `wasm` capability and RC2's `files`, `audio` and `device_calendar`. |
 | `card-host` | App Hub `main`. It runs one bundle and serves no host services except `runtime` discovery. Build it as the [Quick path](#quick-path) shows. |
-| The shells | [Desktop RC4 release, source `9266b008`](#compatible-shell-download); see platform downloads there. The desktop shell and the phone's Home run system and store apps; the desktop also serves connected accounts and app agents' host-service tools. |
+| The shells | [Published desktop RC6](#compatible-shell-download); see platform downloads and acceptance there. The desktop shell and the phone's Home run system and store apps; the desktop also serves connected accounts and app agents' host-service tools. |
 | GitHub publishing | Contract 1.8.0 / `publisher-github-v1`, no developer key. Real releases and public-catalog macOS install/update checks passed; [RC download status](#compatible-shell-download). Isolated phone fixture checks do not establish support for macOS-only sample apps. |
 | Submission | An issue on OctoSense-App-Hub, as App Hub's [SUBMITTING.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/SUBMITTING.md) describes. |
 | Installing your own bundle on a phone | Not supported. See [Running an app](#running-an-app). |

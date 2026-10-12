@@ -9,18 +9,22 @@
 - **组件**（[ADR 0014](https://github.com/OctoSense-org/OctoSense/blob/9266b0083544d86bd7636543b5ff60c61b26460f/docs/adr/0014-app-components-in-webassembly.zh-CN.md)，已接受）：用本仓库的 SDK 编写普通的 Rust，`tools/octo wasm build` 把它变成 `fns/<name>.wasm`。脚本以 `wasm.<function>` 加 JSON 调用每个 `pub fn`，因此不需要编写 WIT，也不需要胶水代码。组件在调用之间保留状态，能用时钟和随机数；还能访问受配额限制的私有文件。ADR 0014 的第 3 阶段再加两项：经 HTTP 访问主机（见[网络](#网络)）；以及通过实际授权检查调用可用的公开宿主服务（见[宿主服务](#宿主服务)）。
 - **核心模块**（[ADR 0011](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0011-apps-own-functions-in-webassembly.zh-CN.md)）：处理字节或 JSON 的函数，用复制来的客体 crate 编写，只能看到自己的输入。本页末尾的[核心模块](#核心模块adr-0011)介绍它们。
 
-**当前源码与发布边界。** [桌面 RC4](../README.zh-CN.md#下载兼容-shell) 已发布，源码为 `9266b008`，包含组件加载、HTTP、公开宿主服务导入与签名目录中的共享组件。它使用 App Hub 契约 1.11，`capabilities` 与 `network.hosts` 披露用途，不作为执行开关。`requires`、受支持的导入、完整性、配额、应用与账户 scope、实际设备同意、原生写入审核及应用间共享检查继续生效。最终 Mac 归档包与通过 11/11 项 Store/组件检查的候选包字节一致；测试使用真实 GitHub 证明与经管理员证明的私有演练目录，不代表官方公开目录组件安装、真实模型或 Windows/Linux 界面验收。OnePlus 6 组件检查使用隔离的源码测试包，没有升级 Home。你的确切应用仍需单独验收。RC2 与 Home beta.2 只包含核心模块；下方历史观察记录保留原有范围。
+**[桌面 RC6](../README.zh-CN.md#下载兼容-shell) 已提供套接字支持。** 要求 `wasm.sockets@1` 的应用可以使用普通 TCP、UDP 和 DNS；RC5 不提供该功能。每个应用仍须在其声明的平台上测试。见 [TCP、UDP 和 DNS](#tcpudp-和-dns)。此变更不增加原生库或特权原始 IP 套接字访问。
+
+**RC5：组件 HTTPS 与图表。** [桌面 RC5](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.5) 已发布，源码为 `83d356c2`（2026 年 10 月 11 日）。它是第一个组件 HTTPS 请求能正常工作的发布版本：RC4 在处理第一次 `wasi:http` 请求、选择 TLS provider 时会 panic（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）。它还注册了原生 D3 图表，应用可用 `charts.d3@1` 声明对它们的依赖（[#470](https://github.com/OctoSense-org/OctoSense/pull/470)）。[Repo Radar](https://github.com/ymote/octosense-repo-radar) 是第一个从官方公开目录安装的组件应用：在公开的 RC5 Mac 安装包上，其[公开商店验收](https://github.com/ymote/octosense-repo-radar/blob/main/review/acceptance-public-store-0.1.2.json)通过了 93 项原生检查，覆盖经 `octosense_component::http` 向 GitHub 发出的真实请求、原生图表，以及组件保存在自己存储中、重启后仍在的关注列表。其封存的组件是基于 `serde`、`serde_json`、`semver`、`time` 和 SDK 的普通 Rust，按体积优化后为 496 KB；每次调用最多发出一个请求，请求超时 3 秒，处于 10 秒的调用期限之内，最多解析 2 MiB 响应，因为 SDK 会缓冲整个响应体。它要求 `wasm-components-v1` 与 `host-api-v1`，并声明 `host_api.required: {"charts.d3": 1}`，因此 RC4 拒绝安装它。RC6 保留这一切，并新增套接字（见上文）。
+
+**RC4 历史基线，保持不变。** [桌面 RC4](https://github.com/OctoSense-org/OctoSense/releases/tag/desktop-v0.1.0-rc.4) 已发布，源码为 `9266b008`，包含组件加载、HTTP、公开宿主服务导入与签名目录中的共享组件。它使用 App Hub 契约 1.11，`capabilities` 与 `network.hosts` 披露用途，不作为执行开关。`requires`、受支持的导入、完整性、配额、应用与账户 scope、实际设备同意、原生写入审核及应用间共享检查继续生效。最终 Mac 归档包与通过 11/11 项 Store/组件检查的候选包字节一致；测试使用真实 GitHub 证明与经管理员证明的私有演练目录，不代表官方公开目录组件安装、真实模型或 Windows/Linux 界面验收。OnePlus 6 组件检查使用隔离的源码测试包，没有升级 Home。你的确切应用仍需单独验收。RC2 与 Home beta.2 只包含核心模块；下方历史观察记录保留原有范围。
 
 | | 核心模块（ADR 0011） | 组件（ADR 0014） |
 | --- | --- | --- |
 | 编写和构建 | 复制 OctoSense 的客体 crate；`cargo build --target wasm32-unknown-unknown` | `tools/octo wasm new`，然后 `tools/octo wasm build`（本页） |
-| 能访问什么 | 只有自己的输入 | 时钟、随机数、有配额的私有存储、HTTP，以及通过实际授权检查的公开宿主服务。 |
+| 能访问什么 | 只有自己的输入 | 时钟、随机数、有配额的私有存储、HTTP，以及通过实际授权检查的公开宿主服务；RC6 另提供 TCP/UDP/DNS。 |
 | 两次调用之间 | 每次调用都从头开始 | 保留状态 |
-| 清单 | 披露 `wasm` | 要求 `wasm-components-v1`；披露 `wasm`、文件用途的 `storage` 和 HTTP 用途的 `net` |
+| 清单 | 披露 `wasm` | 要求 `wasm-components-v1`；套接字导入还要求 `host-api-v1` 和 `host_api.required: {"wasm.sockets": 1}`。披露 `wasm`、文件用途的 `storage` 和 HTTP/套接字用途的 `net` |
 | App Hub 的准入检查（`hub check`） | 从契约 1.7 起接受 | 当前源码接受带有 `wasm-components-v1` 的受支持组件；1.11 策略把能力族声明视为披露。 |
 | 当前源码（macOS、Windows、Linux、Android 和 OpenHarmony） | 包含；OpenHarmony 使用 Pulley | 包含第 3 阶段适配器与逐应用共享组件加载；不含 iOS。源码包含不等于真机验收。 |
 | `card-host` | 接受应用；调用返回 `no service answers "wasm" on this device` | 同样没有 `wasm` 服务。清单通过准入不代表组件能在其中运行。 |
-| 发布版本 | 桌面 RC4 的 macOS/Windows/Linux 包；桌面 RC2 的 macOS/Linux 包及 Home beta.2 也包含 | 桌面 RC4 的 macOS/Windows/Linux 包包含；最终 Mac 归档包验收见上文。Home beta.2 不含组件。 |
+| 发布版本 | 桌面 RC4、RC5 与 RC6 的 macOS/Windows/Linux 包；桌面 RC2 的 macOS/Linux 包及 Home beta.2 也包含 | 桌面 RC4、RC5 与 RC6 的 macOS/Windows/Linux 包包含；RC5 是第一个组件 HTTPS 可用、第一个提供 `charts.d3@1`、也是第一个有组件应用从公开目录安装的版本（见上文）；RC6 新增套接字。Home beta.2 不含组件。 |
 
 下方命令示例在声明策略修正前，曾在 macOS（Apple 芯片）上用 Rust 1.97.1 运行，标注为**未验证**的除外。历史准入输出只证明当时版本行为，不是当前必须取得能力族授权的要求。示例使用 `tools/octo new` 在 `~/apps/my-app` 创建的应用（见 [QUICKSTART §3](QUICKSTART.zh-CN.md#3-创建应用)），id 为 `dev.example.texttools`。
 
@@ -153,10 +157,10 @@ tools/octo wasm build --app ~/apps/my-app
 对 `components/` 中的每个 crate（或每个 `--crate DIR`），它会：
 
 1. 运行 `cargo build --release --target wasm32-wasip2`；
-2. 读取组件的导入，如果有导入不属于 `wasi:cli`、`wasi:clocks`、`wasi:filesystem`、`wasi:http`、`wasi:io`、`wasi:random` 和 `octosense:host` 这几个 `wasm` 服务提供给组件的包，就停下来，不改动应用包；
+2. 读取组件的导入，如果有导入不属于 `wasi:cli`、`wasi:clocks`、`wasi:filesystem`、`wasi:http`、`wasi:io`、`wasi:random`、`wasi:sockets` 和 `octosense:host` 这些受支持的包（套接字导入需要比 RC5 更新的宿主），就停下来，不改动应用包；
 3. 在组件中记录构建它所用的 crate（见[构建所用的 crate](#构建所用的-crate)）；
 4. 把它复制到 `bundle/fns/<name>.wasm`；
-5. 在清单的 `capabilities` 中加入 `wasm`、在 `requires` 中加入 `wasm-components-v1`；组件导入 `wasi:filesystem` 时再加入 `storage`；组件导入 `wasi:http` 时再加入 `net`，并说明改了什么。它从不往 `network.hosts` 中添加主机，也不要求你添加（见[网络](#网络)）；
+5. 在清单的 `capabilities` 中加入 `wasm`、在 `requires` 中加入 `wasm-components-v1`；组件导入 `wasi:filesystem` 时再加入 `storage`；组件导入 `wasi:http` 或 `wasi:sockets` 时再加入 `net`，并说明改了什么。套接字导入还会加入 `host-api-v1` 和 `host_api.required: {"wasm.sockets": 1}`，让较旧宿主在安装前拒绝这个应用。它从不往 `network.hosts` 中添加主机，也不要求你添加（见[网络](#网络)）；
 6. 对准入检查或服务之后会拒绝的情况发出警告：`fns/` 中超过 8 个文件、两个文件导出同名函数、应用包超过 8 MiB；
 7. 找到 `hub` 时为应用包写入摘要。
 
@@ -175,7 +179,7 @@ bundle/manifest.json:
 
 模板的函数从不读取时间，但它的组件导入了 `wasi:clocks/monotonic-clock`；本文用 Rust 标准库构建的每个组件都是如此。
 
-打开套接字的函数能通过编译，但 `tools/octo wasm build` 会拒绝这个组件。函数中有 `std::net::TcpStream::connect(addr)` 时，它输出：
+**支持套接字之前的工具历史输出：** 使用 `std::net::TcpStream::connect(addr)` 的函数能通过编译，但旧版 `tools/octo wasm build` 会拒绝这个组件。当前工具接受它，改为记录所需宿主 API（见 [TCP、UDP 和 DNS](#tcpudp-和-dns)）。旧版输出是：
 
 ```text
 octo: text-tools imports what no host gives a component, so the wasm service would refuse to load it and App Hub's gate refuses the bundle:
@@ -193,7 +197,7 @@ tools/octo wasm info bundle/fns/text-tools.wasm
 
 ### 5. 在应用中调用
 
-RC4 已实现此组件调用路径。下方既有 SDK 示例保留原有验证范围；须在已安装宿主中单独验证你的确切应用。
+RC4、RC5 与 RC6 已实现此组件调用路径。下方既有 SDK 示例保留原有验证范围；须在已安装宿主中单独验证你的确切应用。
 
 ```splash
 host.request("wasm.count", {text: "one two\nthree"}, fn(r){
@@ -215,7 +219,7 @@ Agent 工具映射到组件函数的方式与映射到模块函数相同，用 `
 - `tools/octo wasm call <function> [JSON]` 借助 OctoSense 的 `wasm_call` 示例（OctoSense #455；`main` 自 `cb241350` 起包含，桌面 RC4 也包含），在命令行调用已构建组件的一个函数。它需要一个 OctoSense 检出目录（由 `OCTOSENSE_REPO` 指定，或者是与本仓库并列的 `OctoSense` 目录），首次运行会编译运行时。每次调用都得到一个新实例，`octosense:host` 调用会以 `needs a shell` 失败；其余行为与在 Shell 中相同。已用本页的模板验证：`count '{"text":"one two\nthree"}'` → `{"lines": 2, "words": 3}`。
 - `tools/octo run` 在 `card-host` 中启动应用。`card-host` 没有 `wasm` 服务，每次调用都返回 `no service answers "wasm" on this device`。用它检查布局，以及应用在没有函数时显示什么。App Hub `main` 的 `card-host` 是否接受这份清单属于**未验证**（见页首的表格）。
 - `tools/octo check` 运行当前 App Hub 准入检查，接受带 `wasm-components-v1` 的受支持组件。历史 #186 之前的运行在写入摘要时停止：`hub: app dev.example.texttools needs a newer host: wasm-components-v1`。这条输出属于旧准入检查；当前策略见[准入检查查看什么](#准入检查查看什么)。
-- 桌面 RC4 包含第 2、3 阶段。请在该宿主中测试应用实际使用的导入与公开宿主服务；SDK 本地测试示例不代表你的应用行为或提供商授权已验证。较早的模块演练（[测试](#测试)第 2 到 9 步）保留其自己的记录范围。
+- 桌面 RC5 与 RC6 包含第 2、3 阶段，且 HTTPS 可用；RC4 只能运行函数不发请求的组件。请在 RC6（或 RC5）中测试应用实际使用的导入与公开宿主服务；SDK 本地测试示例不代表你的应用行为或提供商授权已验证。对清单要求 `wasm-components-v1` 的应用，`card-host` 无法驱动其函数；对要求 `host-api-v1` 的应用，`card-host` 会直接拒绝。两者都请在兼容发布版本中、在一个独立的 profile 里用 Shell 的 Makepad instrument 驱动：Repo Radar 的[原生验收](https://github.com/ymote/octosense-repo-radar/blob/main/tools/NATIVE-ACCEPTANCE.md)把这条路径写成了脚本，从商店安装一直到重启，并保留一份把宿主、Hub、目录和所测源码绑定在一起的回执。绝不要为了让预览通过而删除 `requires` 条目。较早的模块演练（[测试](#测试)第 2 到 9 步）保留其自己的记录范围。
 
 SDK 自己的测试用普通的 cargo 为 `wasm32-wasip2` 构建示例和模板，像 ADR 0014 的运行时一样在 Wasmtime 49 中以 WASI 0.2 加载它们，并调用每个函数。对第 3 阶段，测试像 OctoSense 的运行时一样链接 `wasi:http`（`wasmtime-wasi-http` 49）和 `octosense:host`，并照搬它的钩子：`http-client` 示例不经任何授权，按地址和按名称向本机的 HTTP/1.1 服务器发请求，发往从不应答的服务器的请求随这次调用结束；`host-services` 示例调用模拟的宿主服务。在 `sdk/rust/` 中运行：
 
@@ -283,16 +287,16 @@ ADR 0014 给组件提供下列 WASI 0.2 接口；第 3 阶段再加上 `octosens
 | 文件 | 有配额的私有存储作为 `/`，可通过 `std::fs` 读写；设备其他文件仍在隔离范围之外。遗漏 `storage` 不会移除这个隔离目录。 |
 | stdout 和 stderr | 成为应用的日志行 |
 | 环境变量、参数和 stdin | 都为空 |
-| 网络 | 第 3 阶段：通过 `wasi:http`，经 HTTPS 或普通 HTTP 访问任何主机，清单用 `net` 披露用途（见[网络](#网络)）。组件没有套接字：`wasi:sockets` 会被拒绝。 |
+| 网络 | 第 3 阶段：通过 `wasi:http`，经 HTTPS 或普通 HTTP 访问任何主机，清单用 `net` 披露用途（见[网络](#网络)）。普通 TCP/UDP/DNS 通过 `wasi:sockets` 使用，要求宿主声明 `wasm.sockets@1`；RC5 拒绝这些导入。 |
 | 线程 | 没有：`wasm32-wasip2` 没有线程 |
 | 宿主服务 | 第 3 阶段：通过 `octosense:host`，像应用的脚本那样通过实际授权检查调用可用的公开宿主服务（见[宿主服务](#宿主服务)） |
 | 其他应用 | 没有 |
 
 ### 网络
 
-**验证范围**：SDK 测试在 Wasmtime 49 中向本机服务器发出请求，不证明已安装应用能调用真实服务。OctoSense 源码包含第 3 阶段；应用验收须用兼容构建。
+**验证范围**：SDK 测试在 Wasmtime 49 中向本机服务器发出请求。已安装应用能调用真实服务这一点，由 [Repo Radar](https://github.com/ymote/octosense-repo-radar) 在桌面 RC5 上证实：其组件经此适配器通过 HTTPS 查询 `api.github.com`，见本页开头链接的公开商店验收。RC4 不是组件 HTTPS 的可用基线（[#471](https://github.com/OctoSense-org/OctoSense/pull/471)）；应用验收须用 RC5 或更新的兼容构建。
 
-组件只能通过 `wasi:http` 访问网络，而且可以访问任何主机。按 OctoSense 2026 年 10 月 8 日的裁定，应用的网络声明（`net`、`network.hosts`）在安装时展示，运行时不强制：边界是操作系统和宿主的 API 表面。清单应披露 `net` 供审核；修正后的准入检查可以对遗漏披露警告，但不会因此拒绝：
+HTTP 使用 `wasi:http`，可以访问任何主机。[TCP、UDP 和 DNS](#tcpudp-和-dns) 是另一个需要较新宿主的路径。按 OctoSense 2026 年 10 月 8 日的裁定，应用的网络声明（`net`、`network.hosts`）在安装时展示，运行时不强制：边界是操作系统和宿主的 API 表面。清单应披露 `net` 供审核；修正后的准入检查可以对遗漏披露警告，但不会因此拒绝：
 
 ```json
 "capabilities": ["wasm", "net"]
@@ -331,7 +335,7 @@ pub mod functions {
 | `Request::new(method, url)`、`Request::get(url)`、`Request::post(url)` | 构建任意请求：`.header(name, value)`、`.body(bytes)`、`.timeout(duration)`，最后 `.send()` |
 | `Response` | `status`、`headers` 和完整的 `body`；`.text()` 和 `.header(name)` |
 
-请求会阻塞，直到完整的响应到达。任何状态码都算响应，所以 `404` 也是 `Ok`。`Err` 表示请求没有得到响应，内容是可读的文本，`?` 会把它变成脚本中这次调用的错误。只有调用了这些函数的组件才会导入 `wasi:http`；会打开套接字的 crate，例如 `reqwest`、`ureq` 或 `tokio` 的 `net`，仍然无法使用。
+请求会阻塞，直到完整的响应到达。任何状态码都算响应，所以 `404` 也是 `Ok`。`Err` 表示请求没有得到响应，内容是可读的文本，`?` 会把它变成脚本中这次调用的错误。只有调用了这些函数的组件才会导入 `wasi:http`。这个 HTTP 适配器在 RC5 上仍可使用。基于套接字的 crate 需要兼容 WASI 的后端以及较新宿主（见 [TCP、UDP 和 DNS](#tcpudp-和-dns)）；套接字支持本身不提供原生 TLS 库或多线程运行时。
 
 OctoSense 第 3 阶段运行时这样处理请求：
 
@@ -353,6 +357,74 @@ wrote bundle/fns/api-client.wasm: 108,794 bytes, a component that reaches the cl
 bundle/manifest.json:
   added "net" to capabilities: api-client imports wasi:http, the network
 ```
+
+### TCP、UDP 和 DNS
+
+**发布边界：** 普通 `std::net` 套接字要求 `wasm.sockets@1` 宿主 API，
+[已发布的桌面 RC6](../README.zh-CN.md#下载兼容-shell) 提供该 API
+（源码 [`f9f6fea9`](https://github.com/OctoSense-org/OctoSense/commit/f9f6fea90b52182790cb2641fd0145c425af4d84)）。RC5 不提供该功能。这通过 WASI 增加
+TCP 流与监听器、UDP 数据报和 DNS，不增加特权原始 IP 套接字或原生库。
+
+Rust 的 `wasm32-wasip2` 标准库提供导入，不需要学习另一套 OctoSense 套接字封装：
+
+| Rust API | 用途 |
+| --- | --- |
+| `std::net::TcpStream` | 连接并交换 TCP 字节 |
+| `std::net::TcpListener` | 在操作系统允许时绑定、监听并接受连接 |
+| `std::net::UdpSocket` | 绑定并交换 UDP 数据报 |
+| `std::net::ToSocketAddrs` | 把主机名和端口解析为地址 |
+
+使用描述性导出名，例如 `tcp_connect` 或 `fetch_message`。SDK 拒绝名为 `connect`
+的导出：wit-bindgen 的裸 world 导出会与 wasi-libc 的 C `connect` 符号冲突，使
+普通 `std::net` 调用进入错误的 ABI 并陷阱退出。重命名导出可修复已验证的冲突；
+私有 Rust 辅助函数可以叫 `connect`。直接编写 WIT 的开发者也必须使用不同的导出
+名。这是命名问题，不是拒绝 TCP 或主机名解析。
+
+完整的 [socket-client 示例](../sdk/rust/examples/socket-client/src/lib.rs) 导出
+`tcp_echo(address, message)`、`udp_echo(address, message)` 和 `resolve(host, port)`。
+回显客户端连接你自己的回显服务器，把消息限制为 1,024 字节，并在返回时释放套接字。
+TCP 使用 500 毫秒 I/O 超时。Rust 的 WASI UDP 后端不实现 `set_read_timeout`
+或 `set_write_timeout`；示例改用非阻塞接收、500 毫秒时钟截止时间和短暂休眠，
+不创建线程。例如，从应用的 Splash 脚本调用：
+
+```splash
+host.request("wasm.resolve", {host: "localhost", port: 8080}, fn(r){
+    if r.is_ok { addresses = r.data } else { note = r.error }
+})
+```
+
+用 `tools/octo wasm build --app <app>` 构建 crate。对于**任何** `wasi:sockets`
+导入（包括只有 DNS），CLI 在保留其他要求的同时加入以下清单片段：
+
+```json
+{
+  "requires": ["wasm-components-v1", "host-api-v1"],
+  "capabilities": ["wasm", "net"],
+  "host_api": {"required": {"wasm.sockets": 1}}
+}
+```
+
+这是 ABI 兼容性检查，不授予账户访问权限，也不引入网络白名单。使用现有的
+`host-api-v1` 格式，让 RC5 仍可读取包含这个应用的目录，只在安装时拒绝这个不兼容
+的应用。不要把 `wasm.sockets` 标为可选：组件加载时需要这些导入。`wasm info`
+说明这个要求；`wasm build` 把可选的 ABI 1 声明提升为必需，并拒绝冲突的 ABI 版本。
+
+套接字应用还需要支持套接字的 App Hub 准入工具。本检出版本的 publisher-toolchain
+固定到包含 [App Hub #209](https://github.com/OctoSense-org/OctoSense-App-Hub/pull/209)
+的 `38635915`。旧准入工具和已经生成的发布工作流仍可能拒绝它。用
+`tools/octo publish-github <app> --replace` 重新生成工作流；不要为了通过旧准入工具
+而移除兼容性要求。准入通过不等于已经有兼容的宿主发布版。
+
+TCP/UDP 不自动加密流量。需要时选择兼容 WASI 的 TLS 或协议实现，限制缓冲区大小、
+设置操作超时并及时释放套接字。宿主仍负责资源限制、取消与销毁；套接字不能绕过
+操作系统的网络限制。支持套接字不等于原生 TLS 库、所有 `tokio` 特性或每一个第三方
+网络 crate 都可移植。普通 HTTPS API 仍可使用更简单且兼容 RC5 的
+`octosense_component::http` 路径。
+
+**SDK 验证：** 在 `sdk/rust` 中运行 `cargo test --locked --workspace`，会把示例编译
+成真实组件，再检查 TCP 与 UDP 往返、`localhost` 名称解析、返回时关闭 TCP 连接、不应答的 UDP 对端，
+以及测试宿主没有启用套接字时的失败路径。它验证 Wasmtime 49 中的 SDK 传输，不代表
+已安装应用、公网 DNS、手机、生产配额或取消行为的验收；这些需要各宿主自己的测试。
 
 ### 宿主服务
 
@@ -392,7 +464,8 @@ pub mod functions {
 | crate | 原因 | 替代方案 |
 | --- | --- | --- |
 | C 库：`openssl-sys`、`libsqlite3-sys`，以及用 `cc` 或 `cmake` 编译 C 代码的 crate | 它们需要面向 WASI 的 C 编译器，例如 wasi-sdk 的 clang | 纯 Rust 的 crate 或特性：密码学用 RustCrypto 的 `sha2`、`hmac` 或 `aes-gcm`；数据存为应用存储中的文件，或交给脚本的存储 |
-| 网络：`reqwest`、`hyper`、`ureq`、`curl`、`mio`、`socket2`、`tungstenite`、`native-tls` | 它们会打开套接字，而组件没有套接字 | 用 `octosense_component::http`（见[网络](#网络)），或在 Splash 中用 `net` 取回数据，再传进去 |
+| 基于套接字的 crate：`reqwest`、`hyper`、`ureq`、`mio`、`socket2`、`tungstenite` | 所选网络/TLS 后端和特性可能不支持 WASI；`doctor` 警告，不因名称直接拒绝 | 为 `wasm32-wasip2` 构建，在提供 `wasm.sockets@1` 的宿主测试，或使用兼容 RC5 的 HTTP 适配器（见[网络](#网络)） |
+| `native-tls`、`curl`、`curl-sys`、`isahc` | 依赖原生 TLS 或 libcurl | `octosense_component::http`，或兼容 WASI 的纯 Rust 实现 |
 | 线程：`rayon` | `wasm32-wasip2` 没有线程 | 普通迭代器，或关闭该 crate 的并行特性 |
 | 带 `rt-multi-thread`、`net`、`fs`、`process` 或 `signal` 的 `tokio` | 它们需要线程、网络或设备 | 普通函数：组件的函数就是普通调用，不需要异步运行时 |
 | JavaScript 绑定：`wasm-bindgen`、`js-sys`、`web-sys` | 组件里没有 JavaScript | 关闭该 crate 的 `js` 或 `wasm-bindgen` 特性 |
@@ -416,7 +489,7 @@ OctoSense 以原生方式链接了许多 crate，例如 Makepad 的 Markdown 控
   [info] pulldown-cmark 0.13.4: OctoSense renders Markdown itself: Splash's Markdown widget shows it, tables included. Ship the crate only to produce HTML or to read Markdown as data. (docs/SCRIPT-API.md#widgets-available-to-an-app)
 ```
 
-这张表只收录本仓库文档说明商店应用可以使用的功能。`photo`、`pdf`、`word` 等引擎服务只供系统应用使用，因此 `doctor` 一个也不推荐。会打开网络套接字的 crate（例如 `reqwest` 或 `ureq`）属于失败而不是提示：`doctor` 会说明组件应改用 `octosense_component::http` 访问网络（见[无法构建或运行的依赖](#无法构建或运行的依赖)和[网络](#网络)）。
+这张表只收录本仓库文档说明商店应用可以使用的功能。`photo`、`pdf`、`word` 等引擎服务只供系统应用使用，因此 `doctor` 一个也不推荐。基于套接字的 crate（例如 `reqwest` 或 `ureq`）现在会得到兼容性警告，而不是直接失败。它的特性、目标构建和运行时测试决定是否可用（见[无法构建或运行的依赖](#无法构建或运行的依赖)和[网络](#网络)）。
 
 ### 构建所用的 crate
 
@@ -466,7 +539,7 @@ built from 6 crates, as its octosense-crates section lists them:
 | `[refused] functions: fns/text-tools.wasm is a WebAssembly component; the manifest must require wasm-components-v1` | 把它加入 `requires`，或运行 `tools/octo wasm build`。 |
 | 较旧准入工具因遗漏 `storage` 披露而拒绝 | 使用兼容的 1.11 准入工具，披露文件用途供审核；有配额的私有存储仍然生效。 |
 | 较旧准入工具因遗漏 `net` 披露而拒绝 | 使用兼容的 1.11 准入工具，披露网络用途；不会推导运行时主机白名单（见[网络](#网络)）。 |
-| `[refused] contents-invalid (fns/netprobe.wasm): the component imports wasi:sockets/network@0.2.9; a component may import only wasi:cli, wasi:clocks, wasi:filesystem, wasi:http, wasi:io, wasi:random and octosense:host` | 去掉打开套接字的部分（见[无法构建或运行的依赖](#无法构建或运行的依赖)）。 |
+| `[refused] contents-invalid (fns/netprobe.wasm): the component imports wasi:sockets/network@0.2.9; a component may import only wasi:cli, wasi:clocks, wasi:filesystem, wasi:http, wasi:io, wasi:random and octosense:host` | 这是较旧的准入工具。使用支持套接字的准入工具和宿主，并要求 `wasm.sockets@1`，或保留兼容 RC5 的 HTTP 路径（见 [TCP、UDP 和 DNS](#tcpudp-和-dns)）。 |
 
 `fns/` 中每个文件都要遵守的规则（文件名、最多 8 个文件、应用包 8 MiB）与模块相同（见[构建](#构建)）。
 

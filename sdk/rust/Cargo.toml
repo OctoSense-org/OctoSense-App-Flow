@@ -11,6 +11,7 @@ members = [
     "examples/template",
     "examples/http-client",
     "examples/host-services",
+    "examples/socket-client",
     "e2e",
 ]
 # Cargo.lock keeps wasip2, behind octosense-component's `wasi`, at

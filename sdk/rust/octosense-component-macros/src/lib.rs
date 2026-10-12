@@ -258,6 +258,17 @@ fn expand(module: ItemMod) -> syn::Result<TokenStream2> {
                          app's functions); rename this one",
                     ));
                 }
+                // wit-bindgen emits a bare C-linkage export for a world
+                // function. `connect` then replaces wasi-libc's connect(),
+                // so std::net recurses into the incompatible guest ABI and
+                // can trap even when another export opens the socket.
+                if function.wit == "connect" {
+                    return Err(syn::Error::new(
+                        f.sig.ident.span(),
+                        "`connect` collides with wasi-libc's socket symbol; rename the exported \
+                         function to `tcp_connect` or another prefixed name",
+                    ));
+                }
                 if wit_names
                     .insert(function.wit.clone(), f.sig.ident.span())
                     .is_some()
@@ -922,6 +933,10 @@ mod tests {
                 "the wasm service's own method",
             ),
             (
+                "mod m { pub fn connect(addr: &str) -> String { addr.into() } }",
+                "`connect` collides with wasi-libc's socket symbol",
+            ),
+            (
                 "mod m { pub fn f(a_b: u8, a__b: u8) {} }",
                 "`a_b` and `a__b` are both `a-b`",
             ),
@@ -935,5 +950,13 @@ mod tests {
             let error = expand_str(source).unwrap_err();
             assert!(error.contains(hint), "{source}: {error}");
         }
+    }
+
+    #[test]
+    fn prefixed_socket_exports_and_private_helpers_do_not_collide() {
+        let out =
+            expand_str("mod m { fn connect() {} pub fn tcp_connect() { connect() } }").unwrap();
+        assert!(out.contains("export %tcp-connect: func();"));
+        assert!(!out.contains("export %connect:"));
     }
 }

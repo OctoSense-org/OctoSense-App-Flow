@@ -1,0 +1,13 @@
+[package]
+name = "socket-client"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Ordinary std::net TCP, UDP and DNS in a WASI component."
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+octosense-component = { path = "../../octosense-component" }

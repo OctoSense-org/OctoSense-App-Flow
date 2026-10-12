@@ -53,7 +53,7 @@ RESERVED_NAMES = frozenset({
     "agents", "apphub", "appcard", "browser", "calculator", "card", "clock",
     "dev", "notes", "octos", "octoscode", "os", "reference", "reminders",
     "rinx", "sheets", "shell", "system", "task", "terminal", "toolbox",
-    "weather", "workflow",
+    "updater", "weather", "workflow",
 })
 PLATFORMS = ("android", "ios", "macos", "windows", "linux", "openharmony", "web")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -668,6 +668,7 @@ SDK_GIT = "https://github.com/OctoSense-org/OctoSense-App-Flow"
 SDK_REMOTE = re.compile(r"github\.com[:/]OctoSense-org/(OctoSense-App-Flow|OctoScript-App-Design-Flow)(\.git)?/?$", re.I)
 WASM_TARGET = "wasm32-wasip2"
 COMPONENTS_FEATURE = "wasm-components-v1"
+SOCKETS_API = "wasm.sockets"
 # Rust builds components for wasm32-wasip2 from 1.82; the SDK's wit-bindgen
 # 0.62 needs 1.85, and the crates it builds with (wit-component, wit-parser
 # 0.259) need 1.88.
@@ -685,25 +686,25 @@ MAX_BUNDLE_BYTES = 8 << 20
 
 # Why a component imports what no host gives it, and what to do instead.
 IMPORT_HINTS = (
-    ("wasi:sockets/", "network sockets (std::net, or a crate such as reqwest, ureq or tokio's net, which open "
-                      "sockets): a component has none. It reaches the network over HTTP through wasi:http, "
-                      "with octosense_component::http; disclose that use with `net`."),
     ("__wbindgen", "JavaScript bindings (wasm-bindgen): turn off the dependency's js or wasm-bindgen feature."),
 )
 
 # Dependencies that cannot work in a component, and what to use instead.
-NETWORK_HINT = ("opens network sockets, which a component does not have, so it does not work. A component "
-                "reaches the network over HTTP through wasi:http, with octosense_component::http, once the "
-                "manifest has `net`.")
+NETWORK_HINT = ("may need a WASI-compatible networking/TLS backend or different features. Build and test "
+                "for wasm32-wasip2; a crate name alone cannot prove compatibility. Ordinary std::net "
+                "TCP/UDP/DNS needs a host advertising wasm.sockets@1 (not RC5). For HTTP, the SDK's "
+                "octosense_component::http uses wasi:http and also works on RC5.")
+NETWORK_CRATES = frozenset(("reqwest", "hyper", "ureq", "surf", "attohttpc", "socket2", "mio", "tungstenite"))
 BLOCKING_CRATES = {
     "openssl-sys": "links OpenSSL, a C library, which does not build for wasm32-wasip2. "
                    "For cryptography use pure-Rust crates such as RustCrypto's sha2, hmac or aes-gcm.",
-    "native-tls": NETWORK_HINT,
+    "native-tls": "uses the platform's native TLS library, which a WASI component cannot call. "
+                  "Use octosense_component::http for HTTP, or a WASI-compatible pure-Rust TLS backend.",
     "libsqlite3-sys": "builds SQLite, a C library, which needs a C compiler for WASI. "
                       "Keep the data in files in the app's storage (std::fs), or let the script store it.",
-    "reqwest": NETWORK_HINT, "hyper": NETWORK_HINT, "ureq": NETWORK_HINT, "curl": NETWORK_HINT,
-    "curl-sys": NETWORK_HINT, "isahc": NETWORK_HINT, "surf": NETWORK_HINT, "attohttpc": NETWORK_HINT,
-    "socket2": NETWORK_HINT, "mio": NETWORK_HINT, "tungstenite": NETWORK_HINT,
+    "curl": "uses native libcurl; use octosense_component::http for HTTP.",
+    "curl-sys": "links native libcurl; use octosense_component::http for HTTP.",
+    "isahc": "uses native libcurl; use octosense_component::http for HTTP.",
     "wasm-bindgen": "binds JavaScript, which a component does not have. "
                     "Turn off the feature that pulls it in (often `js` or `wasm-bindgen`).",
     "js-sys": "binds JavaScript, which a component does not have.",
@@ -930,6 +931,8 @@ def dependency_findings(cargo, crate):
         label = f"{name} {package['version']}"
         if name in BLOCKING_CRATES:
             problems.append(("fail", f"{label} {BLOCKING_CRATES[name]}"))
+        elif name in NETWORK_CRATES:
+            problems.append(("warn", f"{label} {NETWORK_HINT}"))
         elif name in THREAD_CRATES:
             problems.append(("warn", f"{label} {THREAD_CRATES[name]}"))
         elif name == "tokio":
@@ -1087,13 +1090,23 @@ def script_call(export, kind="component"):
     return f"wasm.{name}({params})" + (f" -> {export['result']}" if export.get("result") else "")
 
 
-def component_manifest_changes(manifest, files, http=None):
+def component_manifest_changes(manifest, files, http=None, sockets=None):
     """Adds what a bundle with components needs to `manifest`; returns a note
-    per change. `files` and `http` name a component that imports
-    wasi:filesystem or wasi:http. It never touches network.hosts: an app's
+    per change. `files`, `http` and `sockets` name components that import
+    wasi:filesystem, wasi:http or wasi:sockets. It never touches network.hosts: an app's
     network declarations are shown at install and not enforced while it runs
     (OctoSense's ruling of 8 October 2026), so a component's requests reach
-    any host, and App Hub's gate asks only for `net`."""
+    any host. Socket imports also need a host API compatibility requirement:
+    RC5 can still read the catalog and refuses only the incompatible app."""
+    if sockets:
+        host_api = manifest.get("host_api") or {}
+        required = host_api.get("required") or {}
+        optional = host_api.get("optional") or {}
+        for declarations in (required, optional):
+            if SOCKETS_API in declarations and (type(declarations[SOCKETS_API]) is not int
+                                                or declarations[SOCKETS_API] != 1):
+                die(f'{SOCKETS_API} imports need ABI 1, but host_api declares {declarations[SOCKETS_API]!r}; '
+                    "resolve the incompatible declaration before building")
     notes = []
     capabilities = manifest.setdefault("capabilities", [])
     requires = manifest.setdefault("requires", [])
@@ -1108,9 +1121,25 @@ def component_manifest_changes(manifest, files, http=None):
         capabilities.append("storage")
         notes.append(f'added "storage" to capabilities: {files} imports wasi:filesystem, '
                      "and its `/` is the app's storage folder")
-    if http and "net" not in capabilities:
+    if (http or sockets) and "net" not in capabilities:
         capabilities.append("net")
-        notes.append(f'added "net" to capabilities: {http} imports wasi:http, the network')
+        name, interface = (http, "wasi:http") if http else (sockets, "wasi:sockets")
+        notes.append(f'added "net" to capabilities: {name} imports {interface}, the network')
+    if sockets:
+        if "host-api-v1" not in requires:
+            requires.append("host-api-v1")
+            notes.append('added "host-api-v1" to requires: socket compatibility is checked before install')
+        if manifest.get("host_api") is None:
+            manifest["host_api"] = {}
+        host_api = manifest["host_api"]
+        required = host_api.setdefault("required", {})
+        if SOCKETS_API not in required:
+            required[SOCKETS_API] = 1
+            notes.append(f'added "{SOCKETS_API}": 1 to host_api.required: {sockets} imports wasi:sockets; '
+                         "requires a forthcoming socket-capable host, not RC5")
+        if SOCKETS_API in host_api.get("optional", {}):
+            del host_api["optional"][SOCKETS_API]
+            notes.append(f'removed "{SOCKETS_API}" from host_api.optional: component imports make it required')
     return notes
 
 
@@ -1152,7 +1181,8 @@ def cmd_wasm_build(args):
     # What the manifest needs, from what the components import.
     files = next((b["name"] for b in built if wasm_component.uses_files(b["info"]["imports"])), None)
     http = next((b["name"] for b in built if wasm_component.uses_http(b["info"]["imports"])), None)
-    notes = component_manifest_changes(manifest, files, http)
+    sockets = next((b["name"] for b in built if wasm_component.uses_sockets(b["info"]["imports"])), None)
+    notes = component_manifest_changes(manifest, files, http, sockets)
 
     fns = bundle / "fns"
     fns.mkdir(exist_ok=True)
@@ -1278,11 +1308,16 @@ def cmd_wasm_info(args):
             print("\n".join(refusal_lines(refused)))
         else:
             print(f'the manifest requires "{COMPONENTS_FEATURE}" in requires (runtime ABI)')
+            if wasm_component.uses_sockets(imports):
+                print(f'the manifest also requires "host-api-v1" and host_api.required {{"{SOCKETS_API}": 1}}; '
+                      'requires a forthcoming socket-capable host, not RC5')
             disclosures = ['"wasm"']
             if wasm_component.uses_files(imports):
                 disclosures.append('"storage" (it imports wasi:filesystem)')
             if wasm_component.uses_http(imports):
                 disclosures.append('"net" (it imports wasi:http)')
+            elif wasm_component.uses_sockets(imports):
+                disclosures.append('"net" (it imports wasi:sockets)')
             print("usage disclosures in capabilities: " + ", ".join(disclosures) +
                   "; omitted declarations do not deny execution in compatible hosts")
             if wasm_component.uses_host_services(imports):
