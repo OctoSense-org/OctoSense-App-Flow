@@ -113,6 +113,12 @@ when it requests a capability nobody serves for it, see
 
 ## Call a service from an app
 
+An L0 card has no statements, so it declares its calls in a sibling
+`bindings.json` rather than calling `host.request` itself. The card side of
+that — which names must be seeded, and the three ways it fails closed — is
+[L0 cards and host services](L0-CARDS-AND-HOST-SERVICES.md). A script app calls
+the service directly:
+
 ```splash
 host.request("mail.accounts", {}, fn(r){
     if r.is_ok && r.data.len() > 0 {
