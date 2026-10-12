@@ -17,13 +17,13 @@ def repository(name, workspace=None):
 def adapt_cargo_paths(repo):
     """Adapt the pinned upstream sibling directory name; leave Rust crate names intact."""
     import subprocess
-    names = subprocess.check_output(["git", "-C", str(repo), "ls-files", "--", "*Cargo.toml"], text=True).splitlines()
+    names = subprocess.check_output(["git", "-C", str(repo), "ls-files", "--", "*Cargo.toml"], text=True, encoding="utf-8").splitlines()
     for name in names:
         path = Path(repo) / name
-        source = path.read_text()
+        source = path.read_text(encoding="utf-8")
         updated = cargo_paths(source)
         if updated != source:
-            path.write_text(updated)
+            path.write_text(updated, encoding="utf-8")
 
 
 def cargo_paths(source):

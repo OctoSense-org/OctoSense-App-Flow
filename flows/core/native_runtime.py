@@ -14,11 +14,11 @@ RUNTIME_URL = "https://github.com/OctoSense-org/Octoscript-Makepad.git"
 
 def git(path, *args, check=True):
     return subprocess.run(["git", "-C", str(path), *args], check=check,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, encoding="utf-8")
 
 
 def runtime_lock():
-    value = json.loads((APPCARDS / "native-runtime.lock.json").read_text())
+    value = json.loads((APPCARDS / "native-runtime.lock.json").read_text(encoding="utf-8"))
     if value.get("schema_version") != 1 or value.get("url") != RUNTIME_URL:
         raise ValueError("AppCards must use the OctoSense-org/Octoscript-Makepad runtime")
     if not re.fullmatch(r"[0-9a-f]{40}", value.get("revision", "")):

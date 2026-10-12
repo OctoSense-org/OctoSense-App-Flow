@@ -2,8 +2,18 @@
 """Prepare the one Octoscript-Makepad release shared by all AppCards."""
 import argparse
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
+
+# Windows decodes every read_text() below (and inside the runtime tools this
+# script loads in-process) with the ANSI code page, e.g. GBK, while the
+# sources are UTF-8. Restart once in UTF-8 mode (PEP 540) instead of
+# pinning an encoding at every call site across repositories.
+if os.name == "nt" and not sys.flags.utf8_mode:
+    os.environ["PYTHONUTF8"] = "1"
+    sys.exit(subprocess.run([sys.executable, *sys.argv]).returncode)
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "flows"))
 from core.native_paths import WORKSPACE
