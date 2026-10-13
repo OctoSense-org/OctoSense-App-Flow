@@ -13,16 +13,27 @@ come from the running app; the painting itself is neutral. Anything the
 virtualized list has scrolled out of the viewport is (correctly) absent, which
 also makes the tool useful as a "what is on screen right now" probe.
 
+The artifact labels itself: every PNG carries a permanent bottom band reading
+"widget-tree redraw · not host pixels". Screenshots are review evidence in this
+repo's flow (docs/PUBLISHING.md), so the honesty label must travel with the
+file — not just live in this docstring, the console output and the README.
+
+Text inputs are drawn from the snapshot's display text only (`t`); the raw
+value (`val`) is never painted, so a password field shows its `•••` mask.
+
 Usage:
     python3 tools/snap-to-png.py --port 8141 --out shot.png [--width 412] [--height 892]
     python3 tools/snap-to-png.py --port 8141 --out shot.png --note "caption text"
 
 Requires: Pillow (`pip install pillow`). CJK fonts are picked from the usual
-system paths when available; text falls back to the default bitmap font.
+Linux/macOS/Windows system paths when available; text falls back to the
+default bitmap font.
 """
 
 import argparse
 import json
+import os
+import sys
 import urllib.request
 
 from PIL import Image, ImageDraw, ImageFont
@@ -37,8 +48,15 @@ LINE = (223, 216, 205)
 FONT_PATHS = [
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/System/Library/Fonts/PingFang.ttc",        # macOS
+    "/System/Library/Fonts/STHeiti Light.ttc",   # macOS fallback
+    "C:\\Windows\\Fonts\\msyh.ttc",              # Windows
+    "C:\\Windows\\Fonts\\simhei.ttf",            # Windows fallback
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
 ]
+
+WATERMARK = "widget-tree redraw · not host pixels"
+BAND_H = 20  # permanent bottom band; content at or below it is skipped
 
 
 def load_font(size):
@@ -50,13 +68,34 @@ def load_font(size):
     return ImageFont.load_default()
 
 
-def fetch(port, path, timeout=10):
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=timeout) as r:
-        return json.loads(r.read())
+def fail(msg):
+    """One-line actionable error, like the octo tool family (no tracebacks)."""
+    print(f"snap-to-png: {msg}", file=sys.stderr)
+    sys.exit(2)
 
 
 def snap_widgets(port):
-    return fetch(port, "/snap")["s"]
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/snap", timeout=10) as r:
+            payload = json.loads(r.read())
+    except Exception as e:
+        fail(f"cannot read /snap from 127.0.0.1:{port} "
+             f"({e.__class__.__name__}: {e}) — is card-host running with --remote {port}?")
+    if not isinstance(payload, dict) or not isinstance(payload.get("s"), list):
+        fail(f"unexpected reply from port {port} (no \"s\" widget list) — "
+             f"is a card-host listening on it?")
+    return payload["s"]
+
+
+def fit_text(d, text, font, max_w):
+    """Width-based truncation with an ellipsis (never a silent hard cut)."""
+    if max_w <= 0:
+        return ""
+    if d.textlength(text, font=font) <= max_w:
+        return text
+    while text and d.textlength(text + "…", font=font) > max_w:
+        text = text[:-1]
+    return text + "…" if text else ""
 
 
 def main():
@@ -80,38 +119,49 @@ def main():
     f_small = load_font(12)
 
     y_top = 30
+    y_floor = args.height - BAND_H
     if args.note:
-        d.text((12, 10), args.note, fill=SECOND, font=f_small)
+        d.text((12, 10), fit_text(d, args.note, f_small, args.width - 24), fill=SECOND, font=f_small)
 
+    drawn = 0
     for w in widgets:
         r = w.get("r") or [0, 0, 0, 0]
         x, y, ww, hh = r
-        if ww <= 0 or hh <= 0 or y < y_top or y > args.height or x < -4:
+        if ww <= 0 or hh <= 0 or y < y_top or y >= y_floor or x < -4:
             continue
         ty, text = w.get("ty"), (w.get("t") or "").strip()
-        wid = w.get("i")
         if not text and ty != "TextInput":
             continue
         if ty == "Button":
             d.rounded_rectangle([x, y, x + ww, y + hh], radius=10, fill=CARD)
-            d.text((x + 6, y + max(2, hh // 2 - 9)), text[:24], fill=ACCENT, font=f_body)
+            d.text((x + 6, y + max(2, hh // 2 - 9)), fit_text(d, text, f_body, ww - 12),
+                   fill=ACCENT, font=f_body)
         elif ty == "TextInput":
             d.rounded_rectangle([x, y, x + ww, y + hh], radius=10,
                                 fill=(255, 255, 255), outline=LINE)
-            val = str(w.get("val") or "")
-            shown = val if val else text
-            d.text((x + 8, y + max(2, hh // 2 - 9)), shown[:40],
-                   fill=INK if val else SECOND, font=f_body)
-        elif wid in ("hint",) or text.startswith(("AI", "已", "把", "（")):
-            d.text((x + 4, y), text[:60], fill=SECOND, font=f_small)
+            # The snapshot's `t` is the widget's *display* text
+            # (widget_tree.rs: text = display_text()) — for a password input
+            # that is the `•` mask. `val` holds the raw text and is never
+            # drawn; it serves only as an "is it empty?" flag for the ink.
+            filled = bool(str(w.get("val") or "").strip())
+            d.text((x + 8, y + max(2, hh // 2 - 9)), fit_text(d, text, f_body, ww - 16),
+                   fill=INK if filled else SECOND, font=f_body)
         elif y < y_top + 60 and hh >= 24:
-            d.text((x + 4, y), text[:40], fill=INK, font=f_title)
+            d.text((x + 4, y), fit_text(d, text, f_title, args.width - x - 8), fill=INK, font=f_title)
         else:
-            d.text((x + 4, y), text[:60], fill=INK, font=f_body)
+            # Fit to the widget's own rect: a label the host clipped to a
+            # narrow strip should not paint its full text here either.
+            d.text((x + 4, y), fit_text(d, text, f_body, ww), fill=INK, font=f_body)
+        drawn += 1
 
+    # Watermark last, so no content can overpaint it.
+    d.rectangle([0, y_floor, args.width, args.height], fill=CARD)
+    d.text((8, y_floor + 4), WATERMARK, fill=SECOND, font=f_small)
+
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     img.save(args.out)
     print(f"wrote {args.out} from live /snap of port {args.port} "
-          f"({len(widgets)} widgets; widget-tree redraw, not host pixels)")
+          f"({drawn} drawn of {len(widgets)} widgets; {WATERMARK})")
 
 
 if __name__ == "__main__":

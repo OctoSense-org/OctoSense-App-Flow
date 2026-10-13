@@ -365,6 +365,7 @@ curl -s 127.0.0.1:8161/quit; curl -s 127.0.0.1:8162/quit
 | `tools/setup-native.py` | 在本仓库旁准备锁定版本的 OctoScript-Makepad 运行时（[native-runtime.lock.json](native-runtime.lock.json)） |
 | `tools/image-to-appcard-flow.sh`、`tools/beauty-pipeline.sh`、`tools/beauty-studio.sh` | image-to-card 与套件流水线的入口 |
 | `tools/check-links.py` | 检查 Markdown 相对链接能否解析（CI 中运行） |
+| `tools/snap-to-png.py` | 把运行中应用的实时 `/snap` 控件树渲染为 PNG（供无显示器的机器评审/迭代；这是重绘，不是宿主像素） |
 
 ## 示例
 
