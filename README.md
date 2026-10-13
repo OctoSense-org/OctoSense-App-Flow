@@ -672,6 +672,7 @@ public-catalog sample installation and update passed on macOS; see the
 | `tools/setup-native.py` | Prepares the pinned OctoScript-Makepad runtime ([native-runtime.lock.json](native-runtime.lock.json)) beside this repository |
 | `tools/image-to-appcard-flow.sh`, `tools/beauty-pipeline.sh`, `tools/beauty-studio.sh` | Entry points for the image-to-card and kit pipelines |
 | `tools/check-links.py` | Checks that relative Markdown links resolve (run in CI) |
+| `tools/snap-to-png.py` | Renders a running app's live `/snap` widget tree to a PNG (for review/iteration on machines without a display; a redraw, not host pixels) |
 
 ## Examples
 
