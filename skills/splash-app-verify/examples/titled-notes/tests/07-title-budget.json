@@ -1,0 +1,55 @@
+{
+  "name": "the model refuses (budget): a plain message, the stored note unchanged",
+  "storage": {
+    "notes-v1.json": {
+      "version": 1,
+      "notes": [
+        {
+          "text": "Buy stamps",
+          "title": ""
+        }
+      ]
+    }
+  },
+  "host": {
+    "model.complete": {
+      "error": "budget: today's budget for this app is used up"
+    }
+  },
+  "steps": [
+    {
+      "wait": {
+        "text": [
+          "Buy stamps"
+        ]
+      }
+    },
+    {
+      "click": {
+        "text": "Suggest a title"
+      }
+    },
+    {
+      "wait": {
+        "text": [
+          "budget is used up"
+        ]
+      }
+    },
+    {
+      "expect": {
+        "absent": [
+          "Titled."
+        ],
+        "files": [
+          {
+            "name": "notes-v1.json",
+            "contains": [
+              "\"title\": \"\""
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

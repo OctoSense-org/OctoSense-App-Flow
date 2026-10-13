@@ -1,0 +1,7 @@
+{
+  "name": "restart: saved notes and titles come back; a corrupt file is left alone",
+  "storage": {"notes-v1.json": {"version": 1, "notes": [{"text": "Pay rent", "title": "Rent"}]}},
+  "steps": [
+    {"wait": {"text": ["Rent", "Pay rent"], "absent": ["No notes yet."]}}
+  ]
+}

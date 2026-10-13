@@ -260,6 +260,7 @@ host.request("mail.list", {account: account.id folder: folder.id offset: 0 limit
 | Missing | `to_lower to_upper contains starts_with ends_with` | use `search(p) == 0`, `search(p) >= 0`, or a regex |
 | Arrays | `push pop clear len remove(i) retain(fn)` | no `sort map filter join insert index_of slice` |
 | Objects | `o.k`, `o[k]`, `delete`, `extend`, `o += {k: v}` | |
+| Type checks | `v.is_string()`, `is_array()`, `is_object()`, `is_number()`, `is_bool()`, `is_nil()`; also `is_nan is_color is_regex is_err is_id is_opcode` | Every value has every one of these (`MP/platform/script/src/native.rs`: the `types` list and the loop after it), so they are safe on parsed JSON of unknown shape. `is_array` and `is_string` **✓ run** in `card-host` on Linux ([splash-app-verify example](../skills/splash-app-verify/examples/titled-notes/bundle/main.splash)). |
 | Numbers → text | `"" + n` | |
 | Loops | `for i in n` (0..n-1), `for v in array`, `for i v in array`, `for k v in object`, `a..b` ranges, `loop {}`, `while` | there is **no `range()`** (**✓ run**: `for i in 3` sums to 3; `for k v in {a:1 b:2}` gives `ab`) |
 
@@ -328,7 +329,10 @@ installed apps; disclosure changes do not expose the host profile.
   an exponent.
 - **`on_render` empty state:** write `if list.len() == 0 { Empty } for i in list.len() { Row }`.
   Do not write `if … {…} else for …`: the empty branch draws nothing and stale
-  rows stay on screen (**✓ run**).
+  rows stay on screen (**✓ run**). The braced form `if … {…} else { for … }`
+  fails the same way: the empty label is never drawn (**✓ run**, a scenario in
+  [splash-app-verify](../skills/splash-app-verify/SKILL.md) against a copy of its
+  example with only that change).
 - **Backgrounds:** `View{show_bg: true draw_bg.color: …}` draws no background
   in `card-host`, whether always visible or shown later with
   `set_visible(true)` (**✓ run**); `SolidView{draw_bg.color: …}` does. Use

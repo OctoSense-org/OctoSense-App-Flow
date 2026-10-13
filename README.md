@@ -201,6 +201,17 @@ release tag, submission) are listed in [AGENTS.md](AGENTS.md#how-to-work);
 explains the ones every flow shares. An agent never fabricates an approval,
 a review result or a submission.
 
+### Script app verify skill
+
+Use [splash-app-verify](skills/splash-app-verify/SKILL.md) when writing or
+changing a script app (`main.splash`). It moves the work to the front: write the
+contract and the scenarios before the code, keep the app in a narrow testable
+shape, and run the scenarios in `card-host` after every edit, with host
+services answered from the scenario. A failed scenario writes a repair request
+in the shape [MODEL-VALIDATION](docs/MODEL-VALIDATION.md) asks for. It checks
+behavior and placement, not looks, and does not replace the gate or the visual
+review.
+
 ### App card UX skill
 
 Use [octoscript-app-card-ux](skills/octoscript-app-card-ux/SKILL.md) when designing

@@ -1,0 +1,7 @@
+{
+  "name": "restart: saved notes come back",
+  "storage": {"notes.json": ["First", "Second"]},
+  "steps": [
+    {"wait": {"text": ["First", "Second"], "absent": ["No notes yet."]}}
+  ]
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Splash App Verify"
+  short_description: "Scenarios first, then code: test script apps in card-host after every edit"
+  default_prompt: "Use $splash-app-verify to write the contract and scenarios for this script app, then build or change main.splash one path at a time and run every scenario in card-host after each edit."

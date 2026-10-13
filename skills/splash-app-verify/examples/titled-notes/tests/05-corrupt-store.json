@@ -1,0 +1,12 @@
+{
+  "name": "a corrupt store: say so, change nothing, and never save over it",
+  "storage": {"notes-v1.json": "{not json"},
+  "steps": [
+    {"wait": {"text": ["could not be read", "No notes yet."], "files": [{"name": "notes-v1.json", "contains": ["{not json"]}]}},
+    {"type": {"into": {"id": "entry"}, "text": "Buy milk"}},
+    {"click": "Keep"},
+    {"expect": {"text": ["Not kept", "Buy milk"], "absent": ["Kept."],
+                "files": [{"name": "notes-v1.json", "contains": ["{not json"]}]},
+     "note": "keeping would have replaced the unreadable file, which the person may still recover"}
+  ]
+}

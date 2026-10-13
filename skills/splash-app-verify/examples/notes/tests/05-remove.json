@@ -1,0 +1,10 @@
+{
+  "name": "tap a note to remove it",
+  "storage": {"notes.json": ["Keep", "Drop"]},
+  "steps": [
+    {"wait": {"text": ["Keep", "Drop"]}},
+    {"click": {"text": "Drop"}},
+    {"wait": {"text": ["Keep"], "absent": ["Drop"]}},
+    {"expect": {"files": [{"name": "notes.json", "contains": ["Keep"]}]}}
+  ]
+}

@@ -26,6 +26,8 @@ jobs:
           python-version: '3.12'
       - name: Starter and executable discovery regressions
         run: python -m unittest discover -s tools -p "test_*.py" -v
+      - name: Script app verify skill (runner logic, no card-host)
+        run: python -m unittest discover -s skills/splash-app-verify/scripts -p "test_*.py" -v
 
   rust-sdk:
     # The Rust SDK for app components (OctoSense ADR 0014): the macro, the

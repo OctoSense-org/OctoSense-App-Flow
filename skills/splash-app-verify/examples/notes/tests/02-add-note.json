@@ -1,0 +1,10 @@
+{
+  "name": "add a note: it shows, the empty text goes, it is saved",
+  "steps": [
+    {"type": {"into": {"id": "entry"}, "text": "Buy milk"}},
+    {"click": {"text": "Add"}},
+    {"wait": {"text": ["Buy milk"], "absent": ["No notes yet."],
+              "files": [{"name": "notes.json", "contains": ["Buy milk"]}]}},
+    {"expect": {"count": [{"of": {"text": "Buy milk"}, "n": 1}]}}
+  ]
+}

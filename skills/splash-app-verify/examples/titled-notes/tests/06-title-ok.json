@@ -1,0 +1,12 @@
+{
+  "name": "suggest a title: the model's title is shown and saved",
+  "storage": {"notes-v1.json": {"version": 1, "notes": [{"text": "Call the plumber about the sink", "title": ""}]}},
+  "host": {"model.complete": {"data": {"output": {"title": "Fix the sink"}, "meta": {"class": "fast"}}, "delay": 0.3}},
+  "steps": [
+    {"wait": {"text": ["Call the plumber about the sink"]}},
+    {"click": {"text": "Suggest a title"}},
+    {"wait": {"text": ["Fix the sink", "Titled."],
+              "calls": [{"service": "model.complete", "count": 1, "contains": "Call the plumber about the sink"}],
+              "files": [{"name": "notes-v1.json", "contains": ["Fix the sink"]}]}}
+  ]
+}

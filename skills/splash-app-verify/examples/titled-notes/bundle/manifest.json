@@ -1,0 +1,13 @@
+{
+  "capabilities": [
+    "storage",
+    "model"
+  ],
+  "id": "titled-notes-demo",
+  "integrity": {
+    "bundle_blake3": ""
+  },
+  "name": "Titled Notes",
+  "schema": 1,
+  "version": "0.1.0"
+}
