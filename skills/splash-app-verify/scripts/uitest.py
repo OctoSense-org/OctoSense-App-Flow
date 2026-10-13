@@ -20,6 +20,9 @@ For each scenario and size the runner:
    made, the files in its jail and the runtime log;
 4. on the first failure, writes the evidence and FEEDBACK.md: a repair request
    in the shape docs/MODEL-VALIDATION.md asks for, scoped to that one failure.
+   When the environment failed instead (no display, a host that died or would
+   not stop, evidence the runner cannot read), it writes ENVIRONMENT.md, which
+   says so and is never a repair request for the app.
 
 It never edits the bundle under test. Exit status: 0 all passed, 1 a scenario
 failed, 2 the environment or a scenario file is broken.
@@ -372,19 +375,31 @@ class Display:
         self.proc = None
         self.env = {}
 
+    DISPLAYS = range(90, 140)
+    SOCKET_WAIT = 5.0   # seconds for a new Xvfb to create its socket
+
     def __enter__(self):
         if sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
             xvfb = shutil.which("Xvfb")
             if not xvfb:
                 raise RuntimeError("no display and no Xvfb: install xvfb (see scripts/setup.sh)")
-            for n in range(90, 140):
-                if not Path(f"/tmp/.X11-unix/X{n}").exists() and not Path(f"/tmp/.X{n}-lock").exists():
-                    break
+            n = next((n for n in self.DISPLAYS if not Path(f"/tmp/.X11-unix/X{n}").exists()
+                      and not Path(f"/tmp/.X{n}-lock").exists()), None)
+            if n is None:
+                raise RuntimeError(f"no free X display among :{self.DISPLAYS[0]}-:{self.DISPLAYS[-1]} for a private "
+                                   "Xvfb; stop stale Xvfb servers or set DISPLAY")
             self.proc = subprocess.Popen([xvfb, f":{n}", "-screen", "0", "1600x1200x24", "-nolisten", "tcp"],
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            for _ in range(50):
-                if Path(f"/tmp/.X11-unix/X{n}").exists():
-                    break
+            # The runner must not go on to blame card-host for a display that never came up.
+            deadline = time.time() + self.SOCKET_WAIT
+            while not Path(f"/tmp/.X11-unix/X{n}").exists():
+                code = self.proc.poll()
+                if code is not None or time.time() >= deadline:
+                    self.__exit__(None, None, None)
+                    self.proc = None
+                    raise RuntimeError(f"Xvfb :{n} " + (f"exited with status {code}" if code is not None else
+                                       f"did not create /tmp/.X11-unix/X{n} in {self.SOCKET_WAIT:g}s")
+                                       + "; no scenario was run")
                 time.sleep(0.1)
             self.env = {"DISPLAY": f":{n}", "LIBGL_ALWAYS_SOFTWARE": "1"}
         self.env["MAKEPAD_HIDE_WINDOWS"] = "1"
@@ -561,9 +576,9 @@ class App:
                 try:
                     self.proc.wait(5)
                 except subprocess.TimeoutExpired:
-                    for sig in (signal.SIGTERM, signal.SIGKILL):
+                    for force in (False, True):
                         try:
-                            os.killpg(self.proc.pid, sig)
+                            stop_process(self.proc, force)
                         except ProcessLookupError:
                             break  # it exited meanwhile
                         try:
@@ -571,8 +586,28 @@ class App:
                             break
                         except subprocess.TimeoutExpired:
                             continue
+                    if self.proc.poll() is None:
+                        raise RuntimeError(f"card-host (pid {self.proc.pid}) ignored /quit, terminate and kill, "
+                                           "and is still running")
         finally:
             self.log_file.close()
+
+
+def stop_process(proc, force):
+    """Stop a host that ignored /quit.
+
+    On POSIX the host was started in its own session, so the whole process
+    group goes (SIGTERM, then SIGKILL with force). Windows has no os.killpg and
+    ignores start_new_session, so there the process itself is terminated; with
+    force, killed.
+    """
+    killpg = getattr(os, "killpg", None)
+    if killpg is not None and os.name != "nt":
+        killpg(proc.pid, signal.SIGKILL if force else signal.SIGTERM)
+    elif force:
+        proc.kill()
+    else:
+        proc.terminate()
 
 
 # --------------------------------------------------------------- selectors and checks
@@ -759,7 +794,10 @@ def check_expectation(app, exp, view):
         if "contains" in item:
             calls = [c for c in calls if item["contains"] in json.dumps(c.get("args"), ensure_ascii=False)]
         want = item.get("count")
-        if (want is None and not calls and "excludes" not in item) or (want is not None and len(calls) != want):
+        # Without "count", at least one call, with or without "excludes": an
+        # "excludes" over no calls at all would pass without testing anything.
+        # To require that no call was made, write "count": 0.
+        if (want is None and not calls) or (want is not None and len(calls) != want):
             raise StepFailed(f"{'≥1' if want is None else want} call(s) to {item['service']}"
                              + (f" with args containing \"{item['contains']}\"" if "contains" in item else ""),
                              f"{len(calls)} such call(s)", {"calls": app.calls()[-5:]})
@@ -921,6 +959,35 @@ def sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def environment_report(result, bundle, card_host):
+    """What an environment error leaves instead of FEEDBACK.md: not a repair request.
+
+    A dead display, a card-host that exited or would not stop, or call evidence
+    the runner cannot read says nothing about the app, and a model that reads
+    a repair request would go and change the app's source for it.
+    """
+    s = result
+    steps = "\n".join(f"  {i + 1}. {json.dumps(st, ensure_ascii=False)}" for i, st in enumerate(s["steps_run"])) or "  (none)"
+    problems = [f"{k}: {v}" for k, v in s.get("evidence", {}).items() if k.endswith("_error")]
+    return f"""# Environment error, not a repair request: {s['scenario']} @ {s['size']}
+
+The runner could not run this scenario to the end, or could not read its own
+evidence. This says nothing about the app: do not change {bundle}/main.splash
+for it. Exit status 2.
+
+While: {s.get('expected')}
+What happened: {s.get('actual')}
+{chr(10).join(problems) if problems else ''}
+Runtime: card-host {card_host}, window {s['size']}.
+Steps reached:
+{steps}
+Evidence: {s['evidence'].get('log', '(no log)')}
+
+Fix the machine, then run every scenario again: `uitest.py doctor`, the display
+(Xvfb), the card-host binary, the disk, and the card-host log above.
+"""
+
+
 def feedback(result, bundle, card_host):
     s = result
     steps = "\n".join(f"  {i + 1}. {json.dumps(st, ensure_ascii=False)}" for i, st in enumerate(s["steps_run"]))
@@ -979,8 +1046,7 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
     view_cfg = scenario.get("viewport")
     w, h = (float(v) for v in size.lower().split("x"))
     view = view_cfg if view_cfg else [0, 0, w, h]
-    tag = f"{scenario_path.stem}@{size}"
-    work = Path(tempfile.mkdtemp(prefix="uitest-"))
+    tag = f"{scenario_path.stem}@{size}"   # its length is checked when the scenarios load
     run_dir = out_dir / tag
     if run_dir.exists():
         shutil.rmtree(run_dir)
@@ -991,6 +1057,8 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
               "host_profile": scenario.get("host_profile", "octosense") if scenario.get("fake_host", True) else None,
               "source_sha256": sha256(bundle / "main.splash"), "passed": False, "steps_run": [], "evidence": {}}
     app = None
+    # Created last, right before the try whose finally removes it: nothing above can leak it.
+    work = Path(tempfile.mkdtemp(prefix="uitest-"))
     jail = work / "data"
     started = time.time()
     try:
@@ -1080,11 +1148,15 @@ def run_one(card_host, bundle, scenario_path, scenario, size, out_dir, display, 
                 result["evidence"]["jail_error"] = f"{type(e).__name__}: {e}"
         shutil.rmtree(work, ignore_errors=True)
     if not result["passed"]:
+        # The app's failure gets a repair request; the environment's never does.
+        name, write = (("ENVIRONMENT.md", environment_report) if result.get("environment_error")
+                       else ("FEEDBACK.md", feedback))
+        key = "environment_report" if result.get("environment_error") else "feedback"
         try:
-            (run_dir / "FEEDBACK.md").write_text(feedback(result, bundle, card_host), encoding="utf-8")
-            result["feedback"] = str(run_dir / "FEEDBACK.md")
+            (run_dir / name).write_text(write(result, bundle, card_host), encoding="utf-8")
+            result[key] = str(run_dir / name)
         except Exception as e:
-            result["feedback"] = f"(not written: {type(e).__name__}: {e})"
+            result[key] = f"(not written: {type(e).__name__}: {e})"
     (run_dir / "result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     return result
 
@@ -1161,6 +1233,9 @@ def _list(value, where, key, what):
 def _list_of(value, kind, where, key):
     if not isinstance(value, list) or not all(isinstance(v, kind) for v in value):
         raise ScenarioError(f"{where}: \"{key}\" is a list of {'strings' if kind is str else 'selectors'}")
+    if kind is str and "" in value:
+        raise ScenarioError(f"{where}: \"{key}\" holds an empty text, which every widget and file contains: "
+                            "the check would pass without testing anything")
 
 
 def validate_selector(sel, where, depth=0):
@@ -1174,7 +1249,8 @@ def validate_selector(sel, where, depth=0):
     if not set(sel) - {"nth", "after"}:
         raise ScenarioError(f"{where}: a selector needs one of id, type, text or contains: {_short(sel)}")
     for key in ("id", "type", "text", "contains"):
-        _need(key not in sel or isinstance(sel[key], str), where, f"selector \"{key}\" is a string")
+        _need(key not in sel or (isinstance(sel[key], str) and sel[key] != ""), where,
+              f"selector \"{key}\" is a non-empty string")
     _need("nth" not in sel or _whole(sel["nth"]), where, "\"nth\" is a whole number from 0")
     if "after" in sel:
         _need(depth < MAX_AFTER, where, f"\"after\" chains more than {MAX_AFTER} selectors")
@@ -1193,6 +1269,8 @@ def validate_expect(exp, where, fake_host=True):
         for t in exp["absent"]:
             if not isinstance(t, str):
                 validate_selector(t, where + " absent")
+            elif not t:
+                raise ScenarioError(f"{where}: \"absent\" holds an empty text, which every widget contains")
     for key in ("in_view", "enabled", "disabled"):
         if key in exp:
             if not isinstance(exp[key], list):
@@ -1217,8 +1295,8 @@ def validate_expect(exp, where, fake_host=True):
         if "count" in item and not _whole(item["count"]):
             raise ScenarioError(f"{where}: calls \"count\" is a whole number")
         for key in ("contains", "excludes"):
-            if key in item and not isinstance(item[key], str):
-                raise ScenarioError(f"{where}: calls \"{key}\" is a string")
+            if key in item and (not isinstance(item[key], str) or not item[key]):
+                raise ScenarioError(f"{where}: calls \"{key}\" is a non-empty string")
     for item in _list(exp.get("files", []), where, "files", "file checks"):
         if not isinstance(item, dict):
             raise ScenarioError(f"{where}: a files item is an object")
@@ -1287,9 +1365,11 @@ def validate_scenario(sc, where):
           f"host_profile must be one of {list(HOST_PROFILES)}")
     _need("startup_timeout" not in sc or _seconds(sc["startup_timeout"], positive=True), where,
           f"\"startup_timeout\" is a number of seconds above 0, at most {MAX_SECONDS}")
-    sizes = sc.get("sizes") if "sizes" in sc else ([sc["size"]] if "size" in sc else [])
+    sizes = sc.get("sizes") if "sizes" in sc else ([sc["size"]] if "size" in sc else [DEFAULT_SIZE])
     _need(isinstance(sizes, list) and all(isinstance(z, str) and SIZE_RE.fullmatch(z) for z in sizes), where,
           "\"sizes\" is a list of \"WxH\" strings such as \"412x892\"")
+    # An empty list would quietly run the default size instead of the sizes the author meant.
+    _need(sizes, where, f"\"sizes\" lists at least one size; leave it out to run {DEFAULT_SIZE}")
     if "viewport" in sc:
         v = sc["viewport"]
         _need(isinstance(v, list) and len(v) == 4 and all(_num(x) for x in v) and v[2] > 0 and v[3] > 0, where,
@@ -1348,9 +1428,21 @@ def read_json(f):
 
 
 def _part_file(base, name, where, key):
-    if not isinstance(name, str) or not name.strip() or any(ord(ch) < 32 for ch in name):
+    """A part named by "use" or "run": a file inside the directory of the file that names it.
+
+    The same rules as a storage name (no absolute path, "..", backslash, glob
+    character or control character), and the resolved file, links followed,
+    must stay inside that directory.
+    """
+    if not isinstance(name, str) or not name.strip():
         raise ScenarioError(f"{where}: \"{key}\" names a part file, got {_short(name)}")
-    return base / name
+    check_jail_name(name, f"{where}: \"{key}\"")
+    root = Path(base).resolve()
+    target = (root / name).resolve()
+    if root not in target.parents:
+        raise ScenarioError(f"{where}: \"{key}\" {name!r} resolves outside {root}; a part lives beside "
+                            "the scenarios that use it")
+    return target
 
 
 def _object(value, where, key, what):
@@ -1421,6 +1513,12 @@ def load_scenarios(target):
         except ScenarioError as e:
             raise ScenarioError(f"{f}: {e}") from None
         validate_scenario(scenario, str(f))
+        # Each run writes its evidence to <out>/<stem>@<size>/: a name the filesystem
+        # cannot hold is the scenario file's problem, reported now.
+        for size in scenario.get("sizes") or [scenario.get("size") or DEFAULT_SIZE]:
+            if len(f"{Path(f).stem}@{size}".encode("utf-8")) > 255:
+                raise ScenarioError(f"{f}: the file name is too long for its evidence directory "
+                                    f"\"{_short(Path(f).stem, 40)}@{size}\" (255 bytes at most); shorten it")
         for name in scenario["storage"]:
             check_jail_name(name, f"{f}: storage")
         for i, step in enumerate(scenario["steps"]):
@@ -1489,7 +1587,9 @@ def cmd_run(args):
                     for line in warnings_for(r):
                         print(f"     note: {line}")
                     if not r["passed"]:
-                        print(f"     expected: {r['expected']}\n     actual:   {r['actual']}\n     feedback: {r['feedback']}")
+                        report = (f"     environment, not the app: {r.get('environment_report')}"
+                                  if r.get("environment_error") else f"     feedback: {r.get('feedback')}")
+                        print(f"     expected: {r['expected']}\n     actual:   {r['actual']}\n{report}")
                         if not args.keep_going:
                             break
                 if results and not results[-1]["passed"] and not args.keep_going:

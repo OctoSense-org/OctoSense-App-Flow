@@ -2,10 +2,11 @@
 
 A small script app in the [narrow shape](../../references/SHAPE.md): notes kept
 on the device, and a "Suggest a title" button that asks the host's
-`model.complete` once. Its scenarios cover the first screen at two sizes, the
-main action, an empty input, a restart, a corrupt store, a title from the
-model, the model refusing on budget, no model service at all, and a model that
-never answers.
+`model.complete` once. Its scenarios cover the first screen and the main action
+at two sizes, an empty input, a restart, a corrupt store, a title from the
+model, the model refusing on budget, no model service at all, a model that
+never answers, and a host that has not granted the model (`10-model-not-granted`,
+written the way a Rinx mini-app's scenario is: `"host_profile": "rinx"`).
 
 ```sh
 python3 skills/splash-app-verify/scripts/uitest.py run \
@@ -13,11 +14,12 @@ python3 skills/splash-app-verify/scripts/uitest.py run \
   skills/splash-app-verify/examples/titled-notes/tests --out /tmp/uitest-titled --keep-going
 ```
 
-Recorded on 2026-10-11 (Linux x86_64, 2 cores, Xvfb with Mesa llvmpipe, card-host
+Recorded on 2026-10-13 (Linux x86_64, 2 cores, Xvfb with Mesa llvmpipe, card-host
 built from App Hub `8d3853c` with the Splash runtime Octoscript-Makepad `6cf2d90a`):
-all 10 runs pass. Each takes 0.6–1.0 s, except the "never answers" scenario, which
-waits out the app's own 20-second timer. card-host's peak resident memory was
-243–245 MB in every run.
+all 12 runs pass. After the first launch each takes 0.6–1.1 s, except the "never
+answers" scenario, which waits out the app's own 20-second timer. card-host's peak
+resident memory was 241–244 MB in every run. With the `not granted` line removed
+from `model_message`, `10-model-not-granted` fails, as it should.
 
 `05-corrupt-store` keeps a note after the unreadable file is reported and checks
 that the file is still the original. Before the app locked writes, that step

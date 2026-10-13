@@ -1,0 +1,17 @@
+{
+  "name": "the host refuses the model: a plain message, and notes still work",
+  "host_profile": "rinx",
+  "note": "Rinx refuses a service it did not grant with this text (Rinx crates/miniapp-core/src/lib.rs:103). This app declares the model, which the profile alone would answer, so the fixture sends the refusal.",
+  "storage": {"notes-v1.json": {"version": 1, "notes": [{"text": "Renew passport", "title": ""}]}},
+  "host": {"model.complete": {"error": "Mini app was not granted model.complete"}},
+  "steps": [
+    {"wait": {"text": ["Renew passport"]}},
+    {"click": {"text": "Suggest a title"}},
+    {"wait": {"text": ["This app may not use the model. Notes still work."],
+              "calls": [{"service": "model.complete", "count": 1}]}},
+    {"type": {"into": {"id": "entry"}, "text": "Buy bread"}},
+    {"click": {"text": "Keep"}},
+    {"wait": {"text": ["Kept.", "Buy bread"],
+              "files": [{"name": "notes-v1.json", "contains": ["Renew passport", "Buy bread"]}]}}
+  ]
+}

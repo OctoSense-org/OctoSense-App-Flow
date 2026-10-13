@@ -1,9 +1,13 @@
 """uitest regressions that need no card-host: fixtures, the fake host source, selectors, checks, feedback."""
 import json
+import signal
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import uitest  # noqa: E402
@@ -270,7 +274,8 @@ class Scenarios(unittest.TestCase):
             for _, sc in uitest.load_scenarios(f):
                 uitest.normalise_replies(sc.get("host"))
                 for step in sc["steps"]:
-                    self.assertTrue(set(step) & {"click", "type", "key", "scroll", "sleep", "expect", "wait"}, f)
+                    # "run" steps are already expanded here; every other documented action counts.
+                    self.assertEqual(len(set(step) & uitest.STEP_ACTIONS), 1, f)
 
     def test_broken_scenario_is_reported(self):
         for body in ('{"name": "no steps"}', '{"steps": [{"clik": "Keep"}]}', '{"steps": [{"run": "_missing.json"}]}'):
@@ -869,6 +874,294 @@ class Housekeeping(unittest.TestCase):
                         uitest.os.environ[k] = v
         setup = (Path(__file__).resolve().parent / "setup.sh").read_text(encoding="utf-8")
         self.assertIn("splash-app-verify/card-host", setup)
+
+
+def tiny_bundle(root):
+    bundle = Path(root) / "bundle"
+    bundle.mkdir()
+    (bundle / "main.splash").write_text("let x = 1\n", encoding="utf-8")
+    (bundle / "manifest.json").write_text(json.dumps({"id": "a", "capabilities": []}), encoding="utf-8")
+    return bundle
+
+
+NO_DISPLAY = type("D", (), {"env": {}})()
+
+
+class EnvironmentIsNotTheApp(unittest.TestCase):
+    """An environment failure must never reach the app's author as a repair request."""
+
+    def test_a_host_that_exits_at_once_writes_an_environment_report_not_feedback(self):
+        # The reviewer's reproduction: a valid scenario against a "card-host" that exits
+        # immediately. The Python interpreter refuses card-host's arguments and exits.
+        with tempfile.TemporaryDirectory() as t:
+            bundle = tiny_bundle(t)
+            before = set(Path(tempfile.gettempdir()).glob("uitest-*"))
+            r = uitest.run_one(FAKE_CARD_HOST, bundle, Path(t) / "01.json",
+                               {"steps": [{"sleep": 0}], "startup_timeout": 30}, "412x892", Path(t) / "out", NO_DISPLAY)
+            run_dir = Path(t) / "out" / "01@412x892"
+            self.assertFalse(r["passed"])
+            self.assertTrue(r["environment_error"])
+            self.assertIn("card-host exited", r["actual"])
+            self.assertFalse((run_dir / "FEEDBACK.md").exists())
+            self.assertNotIn("feedback", r)
+            report = (run_dir / "ENVIRONMENT.md").read_text(encoding="utf-8")
+            self.assertEqual(r["environment_report"], str(run_dir / "ENVIRONMENT.md"))
+            self.assertIn("not a repair request", report)
+            self.assertIn("do not change", report)
+            self.assertNotIn("Repair request", report)
+            self.assertNotIn("Fix: change only", report)
+            self.assertEqual(set(Path(tempfile.gettempdir()).glob("uitest-*")) - before, set())
+
+    def test_an_app_failure_still_writes_the_repair_request(self):
+        class Refused:
+            def __init__(self, *a, **k):
+                Path(a[4]).write_text("", encoding="utf-8")
+                self.line_offset = 0
+
+            def wait_ready(self, timeout):
+                raise uitest.StepFailed("the bundle is admitted", "card-host refused it", {})
+
+            def snap(self): return []
+            def get(self, *a, **k): raise OSError("no remote")
+            def peak_rss_mb(self): return None
+            def calls(self, final=False): return []
+            def close(self): pass
+
+        with tempfile.TemporaryDirectory() as t:
+            bundle = tiny_bundle(t)
+            with mock.patch.object(uitest, "App", Refused):
+                r = uitest.run_one(FAKE_CARD_HOST, bundle, Path(t) / "01.json", {"steps": []}, "412x892",
+                                   Path(t) / "out", NO_DISPLAY)
+            run_dir = Path(t) / "out" / "01@412x892"
+            self.assertFalse(r.get("environment_error", False))
+            self.assertIn("Repair request", (run_dir / "FEEDBACK.md").read_text(encoding="utf-8"))
+            self.assertFalse((run_dir / "ENVIRONMENT.md").exists())
+
+    def test_the_console_names_the_environment_report(self):
+        with tempfile.TemporaryDirectory() as t:
+            bundle = tiny_bundle(t)
+            scenario = Path(t) / "case.json"
+            scenario.write_text('{"steps": [{"sleep": 0}], "startup_timeout": 30}', encoding="utf-8")
+
+            class NoDisplay:
+                env = {}
+                def __enter__(self): return self
+                def __exit__(self, *a): pass
+
+            out = []
+            with mock.patch.object(uitest, "Display", NoDisplay), \
+                    mock.patch.object(uitest, "find_card_host", lambda *a, **k: FAKE_CARD_HOST), \
+                    mock.patch("builtins.print", lambda *a, **k: out.append(" ".join(map(str, a)))):
+                code = uitest.main(["run", str(bundle), str(scenario), "--out", str(Path(t) / "out")])
+            self.assertEqual(code, 2)
+            text = "\n".join(out)
+            self.assertIn("ENV ", text)
+            self.assertIn("environment, not the app", text)
+            self.assertNotIn("FEEDBACK.md", text)
+
+
+class StoppingAHungHost(unittest.TestCase):
+    class Proc:
+        """A card-host that ignores /quit; `stops_on` names the call that finally ends it."""
+        pid = 4242
+
+        def __init__(self, stops_on):
+            self.stops_on, self.calls, self.stopped = stops_on, [], False
+
+        def poll(self):
+            return 0 if self.stopped else None
+
+        def wait(self, timeout=None):
+            if not self.stopped:
+                raise subprocess.TimeoutExpired("card-host", timeout)
+            return 0
+
+        def terminate(self):
+            self.calls.append("terminate")
+            self.stopped = self.stopped or self.stops_on == "terminate"
+
+        def kill(self):
+            self.calls.append("kill")
+            self.stopped = self.stopped or self.stops_on == "kill"
+
+    def hung_app(self, proc):
+        app = uitest.App.__new__(uitest.App)
+        app.proc = proc
+        app.log_file = types.SimpleNamespace(close=lambda: None)
+        app.get = mock.Mock(side_effect=OSError("no answer"))
+        return app
+
+    def test_without_killpg_the_process_itself_is_terminated_then_killed(self):
+        proc = self.Proc("kill")
+        windows = types.SimpleNamespace(name="nt")          # no killpg, as on Windows
+        with mock.patch.object(uitest, "os", windows):
+            uitest.App.close(self.hung_app(proc))
+        self.assertEqual(proc.calls, ["terminate", "kill"])
+        self.assertTrue(proc.stopped)
+
+    def test_on_posix_the_process_group_gets_sigterm_then_sigkill(self):
+        proc = self.Proc("never")
+        sent = []
+
+        def killpg(pid, sig):
+            sent.append((pid, sig))
+            if sig == signal.SIGKILL:
+                proc.stopped = True
+
+        posix = types.SimpleNamespace(name="posix", killpg=killpg)
+        with mock.patch.object(uitest, "os", posix):
+            uitest.App.close(self.hung_app(proc))
+        self.assertEqual(sent, [(4242, signal.SIGTERM), (4242, signal.SIGKILL)])
+        self.assertEqual(proc.calls, [])
+
+    def test_a_host_that_survives_everything_is_reported_not_leaked_silently(self):
+        proc = self.Proc("never")
+        with mock.patch.object(uitest, "os", types.SimpleNamespace(name="nt")):
+            with self.assertRaises(RuntimeError) as e:
+                uitest.App.close(self.hung_app(proc))
+        self.assertIn("still running", str(e.exception))
+        self.assertEqual(proc.calls, ["terminate", "kill"])
+
+
+class PrivateDisplay(unittest.TestCase):
+    class Xvfb:
+        def __init__(self, exit_code=None):
+            self.code, self.terminated = exit_code, False
+
+        def poll(self): return self.code
+        def terminate(self): self.terminated = True
+        def wait(self, timeout=None): return 0
+        def kill(self): pass
+
+    def enter(self, taken, xvfb):
+        class FakePath(str):
+            def exists(self):
+                return taken
+
+        env = {k: v for k, v in uitest.os.environ.items() if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+        display = uitest.Display()
+        display.SOCKET_WAIT = 0.3
+        with mock.patch.object(uitest.sys, "platform", "linux"), mock.patch.dict(uitest.os.environ, env, clear=True), \
+                mock.patch.object(uitest.shutil, "which", lambda name: "/usr/bin/Xvfb"), \
+                mock.patch.object(uitest, "Path", FakePath), \
+                mock.patch.object(uitest.subprocess, "Popen", lambda *a, **k: xvfb):
+            return display.__enter__()
+
+    def test_no_free_display_number_is_an_error_about_the_display(self):
+        with self.assertRaises(RuntimeError) as e:
+            self.enter(taken=True, xvfb=self.Xvfb())
+        self.assertIn("no free X display", str(e.exception))
+
+    def test_an_xvfb_that_never_makes_its_socket_is_stopped_and_reported(self):
+        xvfb = self.Xvfb()
+        with self.assertRaises(RuntimeError) as e:
+            self.enter(taken=False, xvfb=xvfb)
+        self.assertIn("did not create", str(e.exception))
+        self.assertTrue(xvfb.terminated)
+
+    def test_an_xvfb_that_exits_is_reported(self):
+        with self.assertRaises(RuntimeError) as e:
+            self.enter(taken=False, xvfb=self.Xvfb(exit_code=1))
+        self.assertIn("exited with status 1", str(e.exception))
+
+
+class NothingPassesVacuously(unittest.TestCase):
+    view = [0, 0, 412, 892]
+
+    def load(self, body, name="case.json", extra=None):
+        with tempfile.TemporaryDirectory() as t:
+            for n, b in (extra or {}).items():
+                p = Path(t) / n
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_text(b, encoding="utf-8")
+            (Path(t) / name).write_text(json.dumps(body), encoding="utf-8")
+            return uitest.load_scenarios(Path(t) / name)
+
+    def test_excludes_without_count_needs_a_call(self):
+        nothing = FakeApp(WIDGETS, calls=[])
+        with self.assertRaises(uitest.StepFailed):
+            uitest.check_expectation(nothing, {"calls": [{"service": "model.complete", "excludes": "ann"}]}, self.view)
+        uitest.check_expectation(nothing, {"calls": [{"service": "model.complete", "count": 0, "excludes": "ann"}]},
+                                 self.view)
+
+    def test_empty_sizes_and_empty_texts_are_refused(self):
+        bad = [{"sizes": [], "steps": [{"sleep": 0}]},
+               {"steps": [{"expect": {"text": [""]}}]},
+               {"steps": [{"expect": {"absent": [""]}}]},
+               {"steps": [{"expect": {"in_view": [{"contains": ""}]}}]},
+               {"steps": [{"click": {"text": ""}}]},
+               {"steps": [{"expect": {"calls": [{"service": "a.b", "contains": ""}]}}]},
+               {"steps": [{"expect": {"calls": [{"service": "a.b", "excludes": ""}]}}]},
+               {"steps": [{"expect": {"files": [{"name": "n.json", "contains": [""]}]}}]}]
+        for body in bad:
+            with self.subTest(body=body), self.assertRaises(uitest.ScenarioError):
+                self.load(body)
+        ((_, ok),) = self.load({"steps": [{"expect": {"text": ["Kept."]}}]})
+        self.assertNotIn("sizes", ok)
+
+    def test_part_names_stay_beside_the_scenarios(self):
+        part = json.dumps({"host": {"a.b": {"data": 1}}, "steps": [{"sleep": 0}]})
+        with tempfile.TemporaryDirectory() as t:
+            # A valid part one level up: every name below reaches it, and must be refused.
+            (Path(t) / "_x.json").write_text(part, encoding="utf-8")
+            inner = Path(t) / "inner"
+            (inner / "parts").mkdir(parents=True)
+            (inner / "parts" / "_room.json").write_text(part, encoding="utf-8")
+            for name in ("../_x.json", str(Path(t) / "_x.json"), "parts/../../_x.json", "..\\_x.json"):
+                for key in ("use", "run"):
+                    body = {"use": name, "steps": []} if key == "use" else {"steps": [{"run": name}]}
+                    (inner / "case.json").write_text(json.dumps(body), encoding="utf-8")
+                    with self.subTest(name=name, key=key), self.assertRaises(uitest.ScenarioError) as e:
+                        uitest.load_scenarios(inner / "case.json")
+                    self.assertNotIn("cannot read", str(e.exception))
+            (inner / "case.json").write_text(json.dumps({"use": "parts/_room.json",
+                                                         "steps": [{"run": "parts/_room.json"}]}), encoding="utf-8")
+            ((_, sc),) = uitest.load_scenarios(inner / "case.json")
+            self.assertEqual(sc["host"], {"a.b": {"data": 1}})
+
+    def test_a_part_that_links_outside_is_refused(self):
+        with tempfile.TemporaryDirectory() as outside, tempfile.TemporaryDirectory() as t:
+            (Path(outside) / "_x.json").write_text('{"steps": []}', encoding="utf-8")
+            link_or_skip(self, Path(t) / "_x.json", Path(outside) / "_x.json")
+            (Path(t) / "case.json").write_text('{"steps": [{"run": "_x.json"}]}', encoding="utf-8")
+            with self.assertRaises(uitest.ScenarioError):
+                uitest.load_scenarios(Path(t) / "case.json")
+
+    def test_a_name_too_long_for_its_evidence_directory_is_a_scenario_error(self):
+        with tempfile.TemporaryDirectory() as t:
+            f = Path(t) / ("n" * 250 + ".json")          # a legal file name; "<stem>@412x892" is not
+            try:
+                f.write_text('{"steps": [{"sleep": 0}]}', encoding="utf-8")
+            except OSError as e:
+                self.skipTest(f"this system cannot make a 255-byte file name here: {e}")
+            with self.assertRaises(uitest.ScenarioError) as e:
+                uitest.load_scenarios(f)
+            self.assertIn("too long", str(e.exception))
+
+    def test_storage_values_any_json(self):
+        class Host:
+            def __init__(self, *a, **k):
+                Path(a[4]).write_text("", encoding="utf-8")
+                self.line_offset = 0
+
+            def wait_ready(self, timeout): pass
+            def new_runtime_errors(self): return []
+            def calls(self, final=False): return []
+            def peak_rss_mb(self): return None
+            def close(self): pass
+
+        with tempfile.TemporaryDirectory() as t:
+            bundle = tiny_bundle(t)
+            storage = {"a.json": [1, 2], "b.txt": "plain text", "c.json": {"v": 1}, "d.json": 3}
+            with mock.patch.object(uitest, "App", Host):
+                r = uitest.run_one(FAKE_CARD_HOST, bundle, Path(t) / "01.json", {"steps": [], "storage": storage},
+                                   "412x892", Path(t) / "out", NO_DISPLAY)
+            self.assertTrue(r["passed"], r)
+            jail = Path(t) / "out" / "01@412x892" / "jail"
+            self.assertEqual((jail / "a.json").read_text(encoding="utf-8"), "[1, 2]")
+            self.assertEqual((jail / "b.txt").read_text(encoding="utf-8"), "plain text")
+            self.assertEqual(json.loads((jail / "c.json").read_text(encoding="utf-8")), {"v": 1})
+            self.assertEqual((jail / "d.json").read_text(encoding="utf-8"), "3")
 
 
 if __name__ == "__main__":

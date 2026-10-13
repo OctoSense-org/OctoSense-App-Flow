@@ -37,9 +37,9 @@ whose names start with `_` are shared parts, not scenarios.
 | --- | --- | --- |
 | `name` | Shown in results and in `FEEDBACK.md` | the file name |
 | `use` | A part (`"_room.json"`) or a list of them: their `host` replies, `storage` and shared fields fill in what this scenario does not set | none |
-| `sizes` (or `size`) | Window sizes, `WxH` in layout points; the scenario runs once per size from a fresh launch | `412x892`, card-host's default |
+| `sizes` (or `size`) | Window sizes, `WxH` in layout points; the scenario runs once per size from a fresh launch. An empty list is refused: leave the key out for the default | `412x892`, card-host's default |
 | `viewport` | `[x, y, w, h]` that must hold what `in_view` lists | the whole window |
-| `storage` | Files written into the app's jail before it starts: text, or JSON for an object. A name is a path inside the jail: no absolute path, `..`, backslash or glob character | none |
+| `storage` | Files written into the app's jail before it starts. A string is written as the file's text; any other JSON value (an object, an array, a number) is written as its JSON. A name is a path inside the jail: no absolute path, `..`, backslash or glob character | none |
 | `host` | Replies for `host.request`, by service name; see below | every call answers `no service answers "<family>" on this device`, as card-host does |
 | `host_profile` | What a request for a service the manifest does not declare gets: `octosense` answers it, as the current OctoSense hosts do (capability names are disclosures there), and the run lists it as undisclosed; `rinx` refuses it with Rinx's `Mini app was not granted <service>` | `octosense` |
 | `fake_host` | `false` runs the bundle as it is, with card-host's real (empty) services | `true` |
@@ -55,10 +55,12 @@ where `false` is meant, `true` where a count is meant, a size that is not
 runner skipped, or a switch it read the wrong way, would otherwise pass
 without testing anything. The same holds for what JSON allows but nothing
 after it can use: `NaN` or `Infinity`, a lone surrogate escape such as
-`\ud800`, nesting more than 64 deep. Every time (`sleep`, `timeout`,
+`\ud800`, nesting more than 64 deep, an empty text in a check or a selector
+(every widget contains it). Every time (`sleep`, `timeout`,
 `startup_timeout`, `delay`) is seconds from 0 to 600, since a larger number is
 almost always milliseconds; a file name must fit the filesystem (255 bytes a
-part) and hold no control character. A bundle that contains a symbolic link is
+part) and hold no control character, and `<file name>@<size>`, the run's evidence
+directory, must fit too. A bundle that contains a symbolic link is
 refused too: the runner never writes through a link.
 
 Size the app the way its hosts do. A shell that gives the app part of its
@@ -74,7 +76,9 @@ the normal path (`_room.json`) and one for each sequence many scenarios repeat
 (`_load.json`, `_confirm.json`). A scenario then states only what differs:
 the one reply that fails, the steps after it, the checks. A part may hold both
 fixtures and steps; it cannot `use` another part, and its keys are checked like
-a scenario's.
+a scenario's. A part's name is a path inside the directory of the file that
+names it, with the `storage` name rules; a part that resolves outside it,
+through `..`, an absolute path or a link, is refused.
 
 ## Host replies
 
@@ -162,7 +166,7 @@ A `SELECTOR` is a string, matched against a widget's whole text, or an object:
 | `"in_view": [SELECTOR]` | The widget is wholly inside the viewport and no scroll view cuts it off (see below) |
 | `"enabled"` / `"disabled": [SELECTOR]` | The widget exists and is (not) enabled |
 | `"count": [{"of": SELECTOR, "n": 3}]` | Exactly n widgets on screen match |
-| `"calls": [{"service": "…", "count": 1, "contains": "…", "excludes": "…"}]` | The app made that many calls to the service; `contains` filters by the JSON of the arguments; without `count`, at least one; `excludes` fails if any of those calls sends the text (a name that must not reach a model, say) |
+| `"calls": [{"service": "…", "count": 1, "contains": "…", "excludes": "…"}]` | The app made that many calls to the service; `contains` filters by the JSON of the arguments; without `count`, at least one, with or without `excludes`; `excludes` fails if any of those calls sends the text (a name that must not reach a model, say). To require that no call was made, write `"count": 0` |
 | `"files": [{"name": "…", "contains": ["…"]}]` | The file at exactly that path in the jail exists and contains each text; `"missing": true` requires its absence. The name follows the `storage` rules; a file of the same name elsewhere (a backup) or a link does not count |
 
 ## What the runner sees
@@ -197,8 +201,8 @@ evidence of what the app wrote, and the seed for a restart scenario's `storage`.
 
 `<out>/summary.json` belongs to one invocation. It is rewritten when a run
 starts (`"status": "running"`) and after every scenario, and always ends as
-`passed`, `failed`, `environment_error` (no display, a host that would not
-close, unreadable evidence) or `aborted` (a scenario file or the card-host
+`passed`, `failed`, `environment_error` (no display, a host that exited or would not
+close, unreadable evidence; such a run writes `ENVIRONMENT.md`, not `FEEDBACK.md`) or `aborted` (a scenario file or the card-host
 could not be used, or the run was interrupted), with a `finished` time. It carries a `run_id`, the runner version, digests of the
 bundle and of the card-host binary, and each result carries the digest of the
 scenario as it ran. A summary left by an earlier run is never mistaken for this

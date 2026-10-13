@@ -20,6 +20,8 @@ fn with_note(list, text){
     out.push({text: text, title: ""})
     out
 }
+// is_array() and is_string() exist on every value (makepad platform/script/src/native.rs,
+// the `types` list and the loop after it; docs/SCRIPT-API.md, Data and strings).
 fn store_valid(v){
     try {
         if v == nil || v.version != 1 || !v.notes.is_array() { return false }

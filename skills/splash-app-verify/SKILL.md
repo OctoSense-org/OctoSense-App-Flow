@@ -49,7 +49,7 @@ against them, so a gap here becomes a gap in the app.
 | --- | --- | --- |
 | Screens and states | screen × state: first open with data, empty, loading, ready, each failure | what the person sees: the exact texts that must and must not show |
 | Actions | button, input or gesture | widget id (`name :=`), visible text, what changes, what is saved |
-| Host services | `host.request` service | capability, the documented reply shape, every failure the app must show: not granted, no service, an error, no answer, an authorization that ended. Name the host: on OctoSense a capability is a disclosure; Rinx refuses a mini-app what it was not granted |
+| Host services | `host.request` service | capability, the documented reply shape, every failure the app must show: not granted, no service, an error, no answer, an authorization that ended. Name the host: on OctoSense a capability is a disclosure; Rinx refuses a mini-app the services it was not granted |
 | Storage | file in the jail | format, version, what happens when it is missing or corrupt |
 | Sizes | size the app is given: a phone, and the rectangle each shell gives it inside its own window | what must be on the first screen without scrolling; what may need a scroll |
 
@@ -102,6 +102,10 @@ rule there closes off a class of bug:
 4. Green: commit, take the next one. Red: read `FEEDBACK.md`, fix only what it
    names, run again. If a scenario that was green turns red, undo the last edit
    before anything else.
+5. `ENV` (exit status 2): the machine failed, not the app. The run writes
+   `ENVIRONMENT.md` instead of `FEEDBACK.md`; it is not a repair request. Do not
+   change the app for it: fix the display, the card-host or the disk
+   (`uitest.py doctor`), then run again.
 
 Keep exactly one scenario you are working on red. Do not edit a scenario to
 make it pass unless the brief changed, and then say so in the commit.
@@ -158,7 +162,9 @@ Report, from `build/uitest/summary.json` and the flow's checks:
    a runtime error in the log fails the step;
 4. stops at the first failure and writes `snap.json`, `screen.png`,
    `card-host.log`, `calls.json` and `FEEDBACK.md` under `build/uitest/`;
-   every run also keeps the app's jail files there.
+   every run also keeps the app's jail files there. When the environment
+   failed instead (no display, a card-host that exited or would not stop,
+   evidence it cannot read), it writes `ENVIRONMENT.md`, never `FEEDBACK.md`.
 
 Exit status: 0 all passed, 1 a scenario failed, 2 the environment, the
 evidence or a scenario file is broken (not the app's fault). Scenario files
@@ -172,6 +178,12 @@ declared. `summary.json` is rewritten by every run and names its `run_id` and
 
 It sees what `/snap` lists, which is what is on screen; scroll to a part of
 the app before checking it ([what the runner sees](references/SCENARIOS.md#what-the-runner-sees)).
+
+A card-host that ignores `/quit` is stopped: on Linux and macOS its whole
+process group (terminate, then kill), on Windows the process itself. One that
+survives that is reported as an environment error, never left running
+silently. The recorded runs are on Linux; the macOS and Windows paths are
+covered by unit tests only.
 
 Examples: [examples/notes](examples/notes) tests the App Flow template app;
 [examples/titled-notes](examples/titled-notes) is a small app in the shape,
