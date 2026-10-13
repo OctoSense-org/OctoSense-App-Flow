@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.news
+digest 13158e3fae34c52fca19ddcd91656006bc5d242a3db553bbc2a2789ba54f0dd6
+file main.splash
+bytes 23224
+manifest found
+declares net
+capabilities storage, net, images, web, news, glance
+findings 0
+notes 0

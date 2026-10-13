@@ -1,0 +1,12 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.mail
+digest 02e72bd64efccf0bacf989be2f8462cbb7845f0aec372cdf071483c6e7394225
+file main.splash
+bytes 15573
+manifest found
+declares no net
+capabilities storage, mail, glance
+findings 1
+  268:28 error splash.eval property visible not defined on type. Did you mean: distribute(nil) or abs_pos(nil), width(obj), height(obj), aspect(nil) (+55 more)
+notes 0

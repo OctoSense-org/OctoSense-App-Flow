@@ -1,0 +1,12 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.quickdeck
+digest 8e19ad81e418610ae5ac9c1903b2b738d3dcfb0ac3df6196f6552ed50087b036
+file main.splash
+bytes 50962
+manifest found
+declares no net
+capabilities storage, deck
+findings 1
+  warn splash.capability 1 host.request call(s) pass a computed service name, which cannot be checked statically
+notes 0

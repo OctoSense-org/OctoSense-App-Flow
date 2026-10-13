@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app dev.example.fnblindspot
+digest 192da8407d15269d0fdb2ad4510c7bbd2f2dcf3f1178088959fe851148c9a884
+file main.splash
+bytes 28
+manifest found
+declares no net
+capabilities none
+findings 0
+notes 0

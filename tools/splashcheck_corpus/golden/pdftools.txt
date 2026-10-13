@@ -1,0 +1,12 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.pdftools
+digest 0113fcc0c158844d1f2a3361bf6557a560d4f16eb190c0c9d45d34affbeefc72
+file main.splash
+bytes 79599
+manifest found
+declares no net
+capabilities storage, files, pdf
+findings 1
+  warn splash.capability 1 host.request call(s) pass a computed service name, which cannot be checked statically
+notes 0

@@ -1,2 +1,9 @@
 # Preserve exact diff bytes recorded in the dependency provenance lock.
 /flows/image-to-card/wasm/patches/*.patch -whitespace
+
+# The splashcheck golden corpus is byte-exact: the runner digests the fixture's
+# sources and compares the golden files as text it rendered itself with \n. A
+# core.autocrlf checkout that rewrote either to \r\n would show a phantom diff
+# on every run, so both sides of that comparison are pinned.
+/tools/splashcheck_corpus/fn-blindspot/* -text
+/tools/splashcheck_corpus/golden/*.txt -text

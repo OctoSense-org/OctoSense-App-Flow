@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.camera
+digest 8e09d61e71bcd632c279cabd5e625e4bb7d2417d51bd9150c894629ec58989d3
+file main.splash
+bytes 10378
+manifest found
+declares no net
+capabilities storage, camera, microphone, library, glance
+findings 0
+notes 0
