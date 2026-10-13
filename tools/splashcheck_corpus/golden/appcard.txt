@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app pantry-steward
+digest 3f498d18fc7230f7f84744fc0202d0e8fb19a7e59492b6ae72ef75d9b66378f1
+file main.splash
+bytes 131675
+manifest found
+declares no net
+capabilities storage, model
+findings 0
+notes 0

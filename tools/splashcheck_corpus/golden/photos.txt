@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.photos
+digest 838df1a71bb012a6e0cbe8c78c6b4ab6d35eca1a15d3b3a6da5a2d9518c58d7b
+file main.splash
+bytes 60514
+manifest found
+declares no net
+capabilities storage, glance, model
+findings 0
+notes 0

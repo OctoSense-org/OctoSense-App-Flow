@@ -1,0 +1,12 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.writer
+digest 27c4307b3e37e4927ed0006311a2b665395633b1b8b5a4c20642290e93ddc7fe
+file main.splash
+bytes 46008
+manifest found
+declares no net
+capabilities storage, word
+findings 1
+  warn splash.capability 1 host.request call(s) pass a computed service name, which cannot be checked statically
+notes 0

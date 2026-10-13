@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.youtube
+digest a52dda92c6888f68e5b9aa0d96c7cbe6afe16a486183dddfde5ba4f1840cbc20
+file main.splash
+bytes 13168
+manifest found
+declares net
+capabilities storage, net, glance
+findings 0
+notes 0

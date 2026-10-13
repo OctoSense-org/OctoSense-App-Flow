@@ -1,0 +1,11 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.maps
+digest 1b3b5fa68783c4386cce302b3ca87a37931c11999ca49260b4d5cd46def5592d
+file main.splash
+bytes 59187
+manifest found
+declares net
+capabilities storage, net, location, web, glance
+findings 0
+notes 0

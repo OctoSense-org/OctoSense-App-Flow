@@ -1,0 +1,12 @@
+# splashcheck_golden golden corpus
+# checker: splashcheck 2.0.0
+app os.calendar
+digest 623837f482d9dde9d9210c137b513a8ee3d8e19fbd010d06c0690938458fdd77
+file main.splash
+bytes 17011
+manifest found
+declares no net
+capabilities calendar, glance
+findings 1
+  warn splash.capability 1 host.request call(s) pass a computed service name, which cannot be checked statically
+notes 0
