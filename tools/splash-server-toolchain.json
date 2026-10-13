@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "server": {
+    "name": "splash-lsp",
+    "version": "2.0.0",
+    "source": {
+      "repository": "woshuoduijiushidui/makepad",
+      "branch": "feat/splashcheck",
+      "revision": "0bbd43a7bb53ca997ad0f9bd3e8abca8a797bcc0",
+      "package": "makepad-widgets",
+      "bin": "splash-lsp",
+      "features": [
+        "maps"
+      ]
+    },
+    "release": {
+      "repository": "woshuoduijiushidui/OctoSense-App-Flow",
+      "tag": "splash-lsp-v2.0.0"
+    }
+  },
+  "runtime": {
+    "lock": "native-runtime.lock.json",
+    "sibling": "octoscript-makepad"
+  },
+  "platforms": [
+    {
+      "platform": "win32",
+      "target": "x86_64-pc-windows-msvc",
+      "asset": "splash-lsp-2.0.0-x86_64-pc-windows-msvc.zip"
+    },
+    {
+      "platform": "darwin",
+      "target": "aarch64-apple-darwin"
+    },
+    {
+      "platform": "linux",
+      "target": "x86_64-unknown-linux-gnu"
+    }
+  ]
+}

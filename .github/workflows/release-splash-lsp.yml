@@ -1,0 +1,257 @@
+name: Release splash-lsp
+
+# The Splash language server the editor extension downloads on first use. The
+# binary is built here from the makepad revision recorded in
+# tools/splash-server-toolchain.json, because the makepad fork has no CI of its
+# own and distribution cannot depend on it. One tag, one version, one asset per
+# platform, each named for the server version and the platform it runs on.
+#
+# Push a `splash-lsp-v*` tag to publish. The tag must be the tag the record
+# names, or the release and the record disagree about which version is out.
+on:
+  push:
+    tags: ['splash-lsp-v*']
+
+permissions: {}
+
+concurrency:
+  group: release-splash-lsp-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The first platform binary. Adding a platform is the whole change:
+          # one entry here, and the matching "platforms" entry in
+          # tools/splash-server-toolchain.json. Nothing else in the release
+          # path is platform-specific: the record is read, not restated.
+          #
+          #   - os: macos-14
+          #     target: aarch64-apple-darwin
+          #   - os: ubuntu-latest
+          #     target: x86_64-unknown-linux-gnu
+          #
+          # Two conditions come with them. Linux needs makepad's system
+          # libraries before cargo will link (see makepad's README: libx11,
+          # libgtk-3, libasound2, libudev and friends), so an apt step belongs
+          # in the matrix too. And macOS on Intel is a second entry with
+          # x86_64-apple-darwin: until it exists, a Mac build is Apple Silicon
+          # only, which the extension has to say rather than guess.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+
+      # One read of the record, and the rest of the run uses its output: the
+      # asset name, the revision to build, the version to verify against, the
+      # tag to publish under. A target the record does not publish fails here,
+      # so a runner cannot quietly produce an asset nobody recorded.
+      - name: Read the recorded release
+        id: record
+        run: python tools/splash_server_release.py --build-plan "${{ matrix.target }}" >> "$GITHUB_OUTPUT"
+
+      - name: The release is published into the repository the record names
+        run: |
+          if [ "${{ steps.record.outputs.release-repository }}" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::the record names ${{ steps.record.outputs.release-repository }}, not $GITHUB_REPOSITORY"
+            exit 1
+          fi
+
+      - name: The tag is the one the record names
+        run: |
+          if [ "$GITHUB_REF_NAME" != "${{ steps.record.outputs.tag }}" ]; then
+            echo "::error::pushed $GITHUB_REF_NAME, the record names ${{ steps.record.outputs.tag }}"
+            exit 1
+          fi
+
+      - name: Check out the pinned makepad
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.record.outputs.source-repository }}
+          ref: ${{ steps.record.outputs.source-revision }}
+          path: makepad
+          persist-credentials: false
+
+      # makepad patches octoscript-node to a path outside its own tree, so a
+      # build with no sibling beside it does not build at all. The sibling is
+      # the shared runtime this repository already locks.
+      - name: Check out the pinned Octoscript-Makepad sibling
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ steps.record.outputs.runtime-repository }}
+          ref: ${{ steps.record.outputs.runtime-revision }}
+          path: ${{ steps.record.outputs.runtime-sibling }}
+          persist-credentials: false
+
+      # The precondition for the build at all: the sibling must carry the crate
+      # the patch names. There is deliberately no stronger check that the sibling
+      # is "the right one" -- the shared runtime's makepad pin trails this
+      # record's, because the server source is a branch that has not been
+      # released into the runtime yet, and a build against a mismatched node
+      # model fails loudly here rather than shipping.
+      - name: The sibling carries the crate makepad patches to
+        shell: python
+        env:
+          SIBLING: ${{ steps.record.outputs.runtime-sibling }}
+        run: |
+          import os, pathlib
+          manifest = pathlib.Path(os.environ['SIBLING']) / 'crates' / 'octoscript-node' / 'Cargo.toml'
+          if not manifest.is_file():
+              raise SystemExit(f'no {manifest}: the patched octoscript-node is missing')
+          name = next((line.split('=', 1)[1].strip().strip('"')
+                       for line in manifest.read_text(encoding='utf-8').splitlines()
+                       if line.startswith('name =')), None)
+          if name != 'octoscript-node':
+              raise SystemExit(f'{manifest} declares {name!r}, not octoscript-node')
+
+      - name: Build the server
+        working-directory: makepad
+        run: |
+          arguments=(--release --target "${{ matrix.target }}"
+                     -p "${{ steps.record.outputs.source-package }}"
+                     --bin "${{ steps.record.outputs.source-bin }}")
+          if [ -n "${{ steps.record.outputs.source-features }}" ]; then
+            arguments+=(--features "${{ steps.record.outputs.source-features }}")
+          fi
+          cargo build "${arguments[@]}"
+
+      - name: Find the built server
+        id: built
+        run: |
+          suffix=""
+          case "${{ matrix.target }}" in *windows*) suffix=".exe" ;; esac
+          binary="makepad/target/${{ matrix.target }}/release/${{ steps.record.outputs.source-bin }}${suffix}"
+          test -f "$binary" || { echo "::error::no $binary"; exit 1; }
+          echo "binary=$binary" >> "$GITHUB_OUTPUT"
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
+
+      # The binary reports the framework's own package version, so one handshake
+      # checks both things that matter: that the server starts and speaks LSP at
+      # all, and that it is the version the record names. A makepad bump nobody
+      # recorded fails here rather than shipping a release whose name says one
+      # version and whose bytes are another.
+      - name: The server answers an initialize and reports the recorded version
+        shell: python
+        env:
+          BINARY: ${{ steps.built.outputs.binary }}
+          VERSION: ${{ steps.record.outputs.version }}
+        run: |
+          import json, os, subprocess, sys
+          server = subprocess.Popen([os.environ['BINARY']], stdin=subprocess.PIPE,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, bufsize=1)
+
+          def send(message):
+              body = json.dumps(message)
+              server.stdin.write(f'Content-Length: {len(body)}\r\n\r\n{body}')
+              server.stdin.flush()
+
+          def read():
+              headers = {}
+              while True:
+                  line = server.stdout.readline()
+                  if not line:
+                      raise SystemExit('the server closed stdout without answering')
+                  line = line.strip()
+                  if not line:
+                      break
+                  name, value = line.split(':', 1)
+                  headers[name.strip()] = value.strip()
+              return json.loads(server.stdout.read(int(headers['Content-Length'])))
+
+          try:
+              send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                    'params': {'processId': None, 'rootUri': None, 'capabilities': {}}})
+              # serverInfo sits inside capabilities here, not at the top level of
+              # the initialize result as the LSP spec allows.
+              info = read()['result']['capabilities']['serverInfo']
+              if info.get('name') != 'splash-lsp':
+                  raise SystemExit(f'no serverInfo in the initialize result: {info}')
+              if info.get('version') != os.environ['VERSION']:
+                  raise SystemExit(f"the server reports {info.get('version')}, "
+                                   f"the record says {os.environ['VERSION']}")
+              send({'jsonrpc': '2.0', 'method': 'shutdown', 'params': None})
+              read()
+              send({'jsonrpc': '2.0', 'method': 'exit', 'params': None})
+              try:
+                  server.wait(timeout=30)
+              except subprocess.TimeoutExpired:
+                  server.kill()
+                  raise SystemExit('the server did not exit after `exit`')
+          except BaseException as failure:
+              server.kill()
+              print(server.stderr.read(), file=sys.stderr)
+              raise SystemExit(f'the server did not answer an initialize: {failure}')
+          print(f"{info['name']} {info['version']} answers on stdio")
+
+      - name: Pack the asset
+        run: |
+          python - "${{ steps.built.outputs.binary }}" "${{ steps.record.outputs.asset }}" \
+                 "${{ steps.record.outputs.source-bin }}" "${{ steps.built.outputs.suffix }}" <<'PY'
+          import sys, zipfile
+          binary, asset, name, suffix = sys.argv[1:5]
+          with zipfile.ZipFile(asset, 'w', zipfile.ZIP_DEFLATED) as pack:
+              # The entry keeps the platform's own name, so extracting the
+              # archive leaves something runnable without a rename.
+              pack.write(binary, f'{name}{suffix}')
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.record.outputs.asset }}
+          path: ${{ steps.record.outputs.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      # The digests go in the notes, not in the record: a rebuilt binary is a
+      # different binary, so a digest committed in advance would only be a
+      # promise the next build breaks. Published here, it describes the bytes
+      # that were actually uploaded.
+      - name: Write the release notes
+        id: notes
+        shell: python
+        run: |
+          import os, pathlib, sys
+          sys.path.insert(0, 'tools')
+          import splash_server_release as record
+          pin = record.read_pin()
+          pathlib.Path('NOTES.md').write_text(record.release_notes(pin, 'assets'), encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('tag=' + pin['server']['release']['tag'] + '\n')
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${{ steps.notes.outputs.tag }}" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::error::${{ steps.notes.outputs.tag }} is already published. A server release is"
+            echo "::error::immutable: delete it to publish these bytes again, or record a new version."
+            exit 1
+          fi
+          gh release create "${{ steps.notes.outputs.tag }}" --repo "$GITHUB_REPOSITORY" \
+            --verify-tag --title "${{ steps.notes.outputs.tag }}" --notes-file NOTES.md assets/*.zip
