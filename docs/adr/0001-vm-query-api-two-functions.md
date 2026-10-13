@@ -1,7 +1,7 @@
 # ADR 0001: The VM query API: two functions, and nothing else
 
 - **Date:** 2026-10-13
-- **Status:** Accepted (2026-10-13). Not yet implemented: the two functions are issue #9 in this repository, and the code lands in [OctoSense-org/makepad](https://github.com/OctoSense-org/makepad), `platform/script` (crate `makepad-script`, version 1.0.0).
+- **Status:** Accepted (2026-10-13). Implemented as issue #9, in [OctoSense-org/makepad](https://github.com/OctoSense-org/makepad), `platform/script` (crate `makepad-script`, version 1.0.0), commit `136e775`: `query::object_keys` and `query::module_object`; the fixture corpus `platform/script/tests/query_corpus.txt` with a runner per installing crate (`cargo test -p makepad-script` for the modules the crate itself installs, `cargo test -p makepad-widgets` for the isolate's widget-facing modules); and the checked-in surface file `platform/script/tests/query_api_surface.txt`, which `tests/query_api_surface.rs` enforces — the semver check's equivalent, since there is no CI and no crates.io. The chain-walk proof §2 asks for is `tests/query_api.rs::the_prototype_chain_is_walkable_from_outside_with_the_existing_accessors`.
 - **Scope:** How an editor-facing consumer asks the Splash VM which names exist — what the query API contains, what it deliberately leaves out, and how its stability is promised. It does not decide what the language server does with the answer; that is [ADR 0002](0002-analysis-posture-and-one-suppression-rule.md) and issue #8. This record lives in App Flow, where the spec and every ticket that cites it live; the code it governs lands in the makepad fork.
 - **Relates to:** [ADR 0002](0002-analysis-posture-and-one-suppression-rule.md), [ADR 0003](0003-download-first-server-distribution.md); App Flow #1 (the spec), #8, #9; OctoSense [ADR 0005](https://github.com/OctoSense-org/OctoSense/blob/main/docs/adr/0005-app-contract.md), whose stability discipline this copies because it solved the same problem for a shared crate.
 
@@ -38,7 +38,7 @@ A wrapper that grows is how a shared crate loses its shape, so this ADR fixes th
 1. **Enumerate an object's own keys.** `object_keys(object) -> [name]`: the object's own entries, each name once, in a deterministic order (sorted), without values. Not the prototype chain — see §2.
 2. **Get a module object by name.** `module_object(name) -> object | nil`. A name the VM does not have is nil. It is never a trap and never a panic.
 
-These two, because every question above reduces to one of them, and because each addition to a shared crate's public surface is a promise someone has to keep for as long as the crate is at that major version. The exact spelling is issue #9's to choose; the count and the semantics are fixed here.
+These two, because every question above reduces to one of them, and because each addition to a shared crate's public surface is a promise someone has to keep for as long as the crate is at that major version. The exact spelling is issue #9's to choose; the count and the semantics are fixed here. Issue #9 chose a `query` module holding `object_keys(heap, object) -> Vec<String>` and `module_object(heap, name) -> Option<ScriptObject>`, so the promised surface is one small file a reviewer can read in a sitting.
 
 ### 2. Prototype-chain traversal is not in the API
 
@@ -55,7 +55,7 @@ Neither function mutates the heap, runs script, or charges an instruction budget
 ADR 0005 pins the app contract with a fixture corpus of real manifests that every release must accept, plus additive-only within `1.x`. The same two mechanisms, and nothing that needs a CI runner:
 
 - **Additive only within `1.x`.** New functions and new optional results are `1.x`; removing or reinterpreting either function, or changing the order `object_keys` returns, is `2.0` and is called out in the fork's release notes.
-- **A fixture corpus of real objects.** A checked-in corpus naming the modules and objects a real isolate installs — `mod.prelude.widgets`, `mod.host`, `mod.fs`, `mod.sys`, `mod.net`, `mod.std` — with the key sets each must answer. It lives with the crate (`platform/script/tests/`, which already holds the crate's behaviour tests) so it runs with one command anyone can type: `cargo test -p makepad-script`. A consumer that links the crate links the corpus.
+- **A fixture corpus of real objects.** A checked-in corpus naming the modules and objects a real isolate installs — `mod.prelude.widgets`, `mod.host`, `mod.fs`, `mod.sys`, `mod.net`, `mod.std` — with the key sets each must answer. It lives with the crate (`platform/script/tests/`, which already holds the crate's behaviour tests) so it runs with one command anyone can type: `cargo test -p makepad-script`. A consumer that links the crate links the corpus. Issue #9 kept the file there and added a second runner in the widgets crate, because three of those six modules are installed by the isolate setup in `makepad-widgets` rather than by this crate: one corpus file, checked by `cargo test -p makepad-script` for the entries the crate itself installs and by `cargo test -p makepad-widgets` for the rest, each entry naming its runner.
 - **The corpus is the review artifact.** Because no CI runs it, a change to either function names the corpus diff in its pull request. A green local run that nobody wrote down is not a promise.
 
 ### 5. Where it lives
