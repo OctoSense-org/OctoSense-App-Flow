@@ -162,6 +162,13 @@ no --reviewer given; the packet holds 7 questions for one
 tools/octo publish-github "$APP"
 ```
 
+生成模板支持最近 Git 仓库根目录下的 `bundle/`，包括 linked worktree 的根目录。
+应用嵌套在另一仓库中时，即使传入 `--replace`，命令也会在写入文件前拒绝：GitHub
+不会运行嵌套 `.github/workflows/` 目录中的工作流。普通 `tools/octo new` 同样会在
+创建目标目录前拒绝这种布局。monorepo 应用需要自行审阅仓库根目录的工作流并配置正确的
+bundle、component 路径；本命令不会自动生成该配置。拥有独立 Git 仓库的应用继续受支持，
+`new --system` 也继续允许在 shell 仓库内创建系统应用。
+
 `tools/octo new` 也会安装 `.github/workflows/publish-app.yml`。这条命令只写入这个文件，不会推送、创建 Release、提交或批准应用。除非显式加上 `--replace`，否则它拒绝覆盖内容不同的已有工作流。不需要开发者签名 secret；工作流使用 GitHub 的短期任务令牌和 OIDC 权限生成证明并创建 Release。
 
 更新 App Flow 不会改变已有生成工作流固定的 Hub 版本。需要更新时，先保留自己定制的工作流步骤，再显式运行 `tools/octo publish-github "$APP" --replace`，并在提交前审阅 `git -C "$APP" diff -- .github/workflows/publish-app.yml`。替换会重写整个生成文件，不会合并定制步骤；不要用它覆盖无关工作流。当前固定的 App Hub `38635915` 支持 HTTP、宿主服务组件导入和共享组件，并采用声明仅用于披露的策略；旧的 `769e9ee3` 发布工具不支持这些行为。ABI 要求、应用包完整性和 GitHub 发布者证明检查仍然有效。

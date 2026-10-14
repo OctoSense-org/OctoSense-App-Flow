@@ -23,6 +23,21 @@ loader.exec_module(octo)
 
 
 class PublishingSetup(unittest.TestCase):
+    def git(self, root, *args):
+        subprocess.run(['git', '-C', str(root), *args], check=True,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def worktree(self, root):
+        repo = Path(root) / 'repo'
+        repo.mkdir()
+        self.git(repo, 'init')
+        self.git(repo, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                 'commit', '--allow-empty', '-m', 'fixture')
+        worktree = Path(root) / 'app'
+        self.git(repo, 'worktree', 'add', '--detach', str(worktree))
+        self.assertTrue((worktree / '.git').is_file())
+        return worktree
+
     def app(self, root, integrity=None):
         app = Path(root) / 'app'
         (app / 'bundle').mkdir(parents=True)
@@ -31,6 +46,110 @@ class PublishingSetup(unittest.TestCase):
             'integrity': integrity or {'bundle_blake3': 'development'},
         }))
         return app
+
+    def test_nested_app_is_rejected_before_workflow_writes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            self.git(repo, 'init')
+            app = self.app(repo / 'apps')
+            workflow = app / '.github/workflows/publish-app.yml'
+            workflow.parent.mkdir(parents=True)
+            workflow.write_bytes(b'name: developer workflow\n')
+            original = {path: path.read_bytes() for path in app.rglob('*') if path.is_file()}
+            for replace in (False, True):
+                with self.subTest(replace=replace):
+                    error = io.StringIO()
+                    with contextlib.redirect_stderr(error), contextlib.redirect_stdout(io.StringIO()), \
+                            patch.object(octo, 'publisher_workflow', return_value='name: fixture\n') as template, \
+                            self.assertRaises(SystemExit):
+                        octo.cmd_publish_github(argparse.Namespace(dir=str(app), replace=replace))
+                    template.assert_not_called()
+                    self.assertIn('repository root', error.getvalue())
+                    self.assertIn('bundle/', error.getvalue())
+                    self.assertIn(str(repo / '.github/workflows'), error.getvalue())
+                    self.assertIn('component', error.getvalue())
+                    self.assertEqual({path: path.read_bytes() for path in app.rglob('*') if path.is_file()}, original)
+            self.assertFalse((repo / '.github').exists())
+
+    def test_new_nested_app_is_rejected_before_destination_creation(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            self.git(repo, 'init')
+            dest = repo / 'apps/new-app'
+            args = argparse.Namespace(dir=str(dest), id='dev.example.quicknotes',
+                                      name='Quick Notes', platform=['windows'], system=False)
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), contextlib.redirect_stdout(io.StringIO()), \
+                    patch.object(octo, 'publisher_workflow', return_value='name: fixture\n') as template, \
+                    patch.object(octo, 'find_binary', return_value=(None, None, None)) as binary, \
+                    self.assertRaises(SystemExit):
+                octo.cmd_new(args)
+            template.assert_not_called()
+            binary.assert_not_called()
+            self.assertIn('repository root', error.getvalue())
+            self.assertIn(str(repo / '.github/workflows'), error.getvalue())
+            self.assertFalse(dest.parent.exists())
+
+    def test_app_with_own_git_repository_remains_publishable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self.git(temp, 'init')
+            app = self.app(temp)
+            self.git(app, 'init')
+            with patch.object(octo, 'publisher_workflow', return_value='name: fixture\n'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(octo.cmd_publish_github(argparse.Namespace(dir=str(app), replace=False)), 0)
+            self.assertEqual((app / '.github/workflows/publish-app.yml').read_text(), 'name: fixture\n')
+            self.assertFalse((Path(temp) / '.github').exists())
+
+    def test_nested_app_in_linked_worktree_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = self.worktree(temp)
+            app = self.app(root)
+            error = io.StringIO()
+            with contextlib.redirect_stderr(error), contextlib.redirect_stdout(io.StringIO()), \
+                    self.assertRaises(SystemExit):
+                octo.cmd_publish_github(argparse.Namespace(dir=str(app), replace=False))
+            self.assertIn(str(root / '.github/workflows'), error.getvalue())
+            self.assertFalse((app / '.github').exists())
+            self.assertFalse((root / '.github').exists())
+
+    def test_linked_worktree_root_remains_publishable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = self.worktree(temp)
+            self.assertEqual(self.app(temp), root)
+            with patch.object(octo, 'publisher_workflow', return_value='name: fixture\n'), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(octo.cmd_publish_github(argparse.Namespace(dir=str(root), replace=False)), 0)
+            self.assertEqual((root / '.github/workflows/publish-app.yml').read_text(), 'name: fixture\n')
+
+    def test_new_standalone_app_remains_supported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            dest = Path(temp) / 'app'
+            args = argparse.Namespace(dir=str(dest), id='dev.example.quicknotes',
+                                      name='Quick Notes', platform=['windows'], system=False)
+            with patch.object(octo, 'publisher_workflow', return_value='name: fixture\n'), \
+                    patch.object(octo, 'find_binary', return_value=(None, None, None)), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(octo.cmd_new(args), 0)
+            self.assertTrue((dest / 'bundle/manifest.json').is_file())
+            self.assertEqual((dest / '.github/workflows/publish-app.yml').read_text(), 'name: fixture\n')
+
+    def test_new_nested_system_app_remains_supported(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            self.git(repo, 'init')
+            dest = repo / 'apps/system-fixture'
+            args = argparse.Namespace(dir=str(dest), id='os.system-fixture',
+                                      name='System Fixture', platform=['windows'], system=True)
+            with patch.object(octo, 'publisher_workflow', return_value='name: fixture\n'), \
+                    patch.object(octo, 'find_binary', return_value=(None, None, None)), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(octo.cmd_new(args), 0)
+            manifest = json.loads((dest / 'bundle/manifest.json').read_text(encoding='utf-8'))
+            self.assertEqual(manifest['id'], 'os.system-fixture')
+            self.assertTrue((dest / 'bundle/main.splash').is_file())
+            self.assertEqual((dest / '.github/workflows/publish-app.yml').read_text(), 'name: fixture\n')
+            self.assertFalse((repo / '.github').exists())
 
     def test_installer_is_idempotent_and_does_not_publish(self):
         with tempfile.TemporaryDirectory() as temp:

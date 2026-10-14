@@ -237,6 +237,16 @@ For an existing editable app directory, install the workflow from App Flow:
 tools/octo publish-github "$APP"
 ```
 
+The generated template supports `bundle/` at the nearest Git repository's
+root, including a linked worktree root. It refuses an app nested in another
+repository before writing files, even with `--replace`: GitHub does not run
+workflows from a nested `.github/workflows/` directory. Ordinary `tools/octo
+new` also refuses that layout before creating its destination. For a monorepo
+app, manually review a workflow at the repository root with the correct
+bundle and component paths; this command does not generate that configuration.
+An app with its own Git repository remains supported, and `new --system`
+continues to scaffold system apps inside a shell repository.
+
 `tools/octo new` also installs `.github/workflows/publish-app.yml`. The command
 only writes that file: it does not push, release, submit or approve the app.
 It refuses to overwrite a different workflow unless you explicitly use
