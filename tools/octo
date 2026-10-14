@@ -82,6 +82,20 @@ def publisher_workflow():
     return template.replace("__HUB_REVISION__", revision)
 
 
+def validate_publisher_root(app):
+    """The release template needs bundle/ at the nearest Git repository root."""
+    for root in (app, *app.parents):
+        marker = root / ".git"
+        if marker.is_dir() or marker.is_file():
+            if root != app:
+                raise ValueError(
+                    f"GitHub publishing template only supports bundle/ at the repository root; "
+                    f"{app} is nested in {root}. GitHub only runs workflows in "
+                    f"{root / '.github' / 'workflows'}. For a nested app, manually review "
+                    "and configure a workflow there with the correct bundle/component paths.")
+            return
+
+
 def install_publisher_workflow(app, content, replace=False):
     """Never follow an app's workflow symlinks or overwrite custom automation."""
     folder = app / ".github" / "workflows"
@@ -260,6 +274,8 @@ def cmd_new(args):
     name = args.name or "My Notes"
     # Resolve the release tooling before creating a partially usable project.
     try:
+        if not args.system:
+            validate_publisher_root(dest)
         workflow = publisher_workflow()
     except (OSError, ValueError) as error:
         die(str(error))
@@ -590,6 +606,7 @@ def cmd_publish_github(args):
     if not manifest_path.is_file():
         die("Expected an app directory containing bundle/manifest.json")
     try:
+        validate_publisher_root(app)
         manifest = json.loads(manifest_path.read_text())
         if sealed_release(manifest):
             die("Use the editable source repository, not a sealed release bundle")
