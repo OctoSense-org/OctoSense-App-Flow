@@ -59,6 +59,12 @@ PLATFORMS = ("android", "ios", "macos", "windows", "linux", "openharmony", "web"
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
+def write_utf8(path, content):
+    """Bundle digests require UTF-8 and LF on every authoring platform."""
+    with path.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write(content)
+
+
 def sealed_release(manifest):
     integrity = manifest.get("integrity") or {}
     # Typed unsigned manifests may contain signature:null. Any non-null
@@ -69,14 +75,14 @@ def sealed_release(manifest):
 
 def publisher_workflow():
     """Use the reviewed immutable Hub toolchain, never a moving branch."""
-    config = json.loads((REPO / "tools/publisher-toolchain.json").read_text())
+    config = json.loads((REPO / "tools/publisher-toolchain.json").read_text(encoding="utf-8"))
     revision = config.get("revision")
     if (config.get("schema") != 1
             or config.get("repository") != "OctoSense-org/OctoSense-App-Hub"
             or not isinstance(revision, str)
             or re.fullmatch(r"[0-9a-f]{40}", revision) is None):
         raise ValueError("GitHub publishing needs a reviewed immutable App Hub toolchain revision")
-    template = (REPO / "tools/publish-app.template.yml").read_text()
+    template = (REPO / "tools/publish-app.template.yml").read_text(encoding="utf-8")
     if template.count("__HUB_REVISION__") != 1:
         raise ValueError("GitHub publishing workflow template is invalid")
     return template.replace("__HUB_REVISION__", revision)
@@ -90,7 +96,7 @@ def install_publisher_workflow(app, content, replace=False):
         if path.is_symlink():
             raise ValueError("Refusing a symlink in the publishing workflow path")
     if target.exists():
-        if target.is_file() and target.read_text() == content:
+        if target.is_file() and target.read_text(encoding="utf-8") == content:
             return False
         if not replace:
             raise ValueError(".github/workflows/publish-app.yml already exists; review it before using --replace")
@@ -272,21 +278,21 @@ def cmd_new(args):
             shutil.copy2(src, dest / extra)
 
     manifest_path = dest / "bundle" / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["id"] = app_id
     manifest["name"] = name
     manifest["version"] = "0.1.0"
     manifest["integrity"] = {"bundle_blake3": ""}
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    write_utf8(manifest_path, json.dumps(manifest, indent=2) + "\n")
 
     listing_path = dest / "bundle" / "listing.json"
-    listing = json.loads(listing_path.read_text())
+    listing = json.loads(listing_path.read_text(encoding="utf-8"))
     listing["platforms"] = list(dict.fromkeys(args.platform))
-    listing_path.write_text(json.dumps(listing, indent=2) + "\n")
+    write_utf8(listing_path, json.dumps(listing, indent=2) + "\n")
 
     main = dest / "bundle" / "main.splash"
     if args.name:
-        main.write_text(main.read_text().replace('text: "My Notes"', "text: " + json.dumps(name), 1))
+        write_utf8(main, main.read_text(encoding="utf-8").replace('text: "My Notes"', "text: " + json.dumps(name), 1))
     install_publisher_workflow(dest, workflow)
 
     hub, _, _ = find_binary("hub", "OCTO_HUB")
@@ -382,7 +388,7 @@ def wait_for(log_path, proc, port, timeout):
     listening = admitted = error = None
     want = re.compile(r"\[makepad-remote\] listening on 127\.0\.0\.1:%d pid=%d\b" % (port, proc.pid))
     while time.time() < deadline:
-        text = log_path.read_text(errors="replace") if log_path.exists() else ""
+        text = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
         for line in text.splitlines():
             if want.search(line) and not listening:
                 listening = line.strip()
@@ -416,7 +422,7 @@ def cmd_run(args):
     if not (bundle / "manifest.json").is_file():
         die(f"{bundle} has no manifest.json; pass the bundle directory (…/bundle)")
     try:
-        manifest = json.loads((bundle / "manifest.json").read_text())
+        manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
         if sealed_release(manifest):
             die("card-host cannot run a sealed release. Use the editable source bundle or install the release in a compatible OctoSense host.")
     except (OSError, ValueError) as error:
@@ -469,7 +475,7 @@ def cmd_run(args):
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        print(log_path.read_text(errors="replace")[-4000:])
+        print(log_path.read_text(encoding="utf-8", errors="replace")[-4000:])
         die(msg + f"\n  (stopped the card-host it started, pid {proc.pid}; log {log_path})")
 
     listening, admitted, error = wait_for(log_path, proc, args.port, args.timeout)
@@ -543,7 +549,7 @@ def cmd_check(args, extra):
     if not (bundle / "manifest.json").is_file():
         die(f"{bundle} has no manifest.json")
     hub = need("hub", "OCTO_HUB")
-    manifest = json.loads((bundle / "manifest.json").read_text())
+    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
     signed = sealed_release(manifest)
     if signed:
         print("octo: the manifest carries signing metadata; checking the exact bytes without restamping.")
@@ -575,7 +581,7 @@ def cmd_check(args, extra):
     # Things the gate does not look at, but a reviewer will.
     listing_path = bundle / "listing.json"
     if listing_path.is_file():
-        text = listing_path.read_text()
+        text = listing_path.read_text(encoding="utf-8")
         hits = [p for p in PLACEHOLDERS if p in text]
         if hits:
             print(f"octo: note: listing.json still holds template placeholders ({', '.join(hits)}); "
@@ -590,7 +596,7 @@ def cmd_publish_github(args):
     if not manifest_path.is_file():
         die("Expected an app directory containing bundle/manifest.json")
     try:
-        manifest = json.loads(manifest_path.read_text())
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if sealed_release(manifest):
             die("Use the editable source repository, not a sealed release bundle")
         workflow = publisher_workflow()
@@ -865,8 +871,8 @@ def cmd_wasm_new(args):
         die(f"bundle/fns/{name}.wasm already exists, and `wasm build` would replace it; choose another name")
     sdk, summary = sdk_dependency(crate, args.sdk)
     (crate / "src").mkdir(parents=True)
-    template = (COMPONENT_TEMPLATE / "Cargo.toml.template").read_text()
-    (crate / "Cargo.toml").write_text(template.replace("{{name}}", name).replace("{{sdk}}", sdk))
+    template = (COMPONENT_TEMPLATE / "Cargo.toml.template").read_text(encoding="utf-8")
+    write_utf8(crate / "Cargo.toml", template.replace("{{name}}", name).replace("{{sdk}}", sdk))
     shutil.copy2(COMPONENT_TEMPLATE / "src" / "lib.rs", crate / "src" / "lib.rs")
     shutil.copy2(COMPONENT_TEMPLATE / ".gitignore", crate / ".gitignore")
     print(f"created {crate}")
@@ -1161,7 +1167,7 @@ def cmd_wasm_build(args):
     bundle = app / "bundle"
     manifest_path = bundle / "manifest.json"
     try:
-        manifest = json.loads(manifest_path.read_text())
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         die(f"{manifest_path}: {error}")
     if sealed_release(manifest):
@@ -1198,7 +1204,7 @@ def cmd_wasm_build(args):
             print(f"  {script_call(export)}")
         print(f"  {crates_line(b['crates'])} (tools/octo wasm info lists them)")
     if notes:
-        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+        write_utf8(manifest_path, json.dumps(manifest, indent=2) + "\n")
         print("bundle/manifest.json:")
         for note in notes:
             print(f"  {note}")
