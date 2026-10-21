@@ -16,7 +16,11 @@ is the metadata scaffold for a card bundle: manifest, listing, icon and agent
 instructions. It has no entry file (`page.card`) and no screenshot, so the
 gate refuses it even after `hub stamp`, with `entry` and `listing` refusals. Add the
 flow's `page.card` and `kit/` and a real capture, and replace its placeholder
-`platforms` with the platforms you tested.
+`platforms` with the platforms you tested. Replace the starter icon with your
+own identity following App Hub's [OctoSense icon format](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations):
+64-point square, central 66% foreground, restrained illustrated object and no
+baked platform corners or outer shadow. The card's extracted screen artwork
+does not replace this icon-authoring step.
 
 To use a font of your own, put the `.ttf` or `.otf` file in the bundle and
 name it in `font_src` with a bundle-relative path, such as

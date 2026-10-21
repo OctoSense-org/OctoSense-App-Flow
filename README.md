@@ -30,6 +30,10 @@ It is for hackathon contestants and other developers building an OctoSense
 app, and for the coding agents they work with. This repository was originally
 named *OctoScript-AppCard*.
 
+Every new app also needs its own icon in the approved OctoSense illustrated
+family. App Hub's [icon authoring guide](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md) owns the format,
+export rules and review checklist; both app templates link to it.
+
 ## Contents
 
 - [Hackathon: start here](#hackathon-start-here)

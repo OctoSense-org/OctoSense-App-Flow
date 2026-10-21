@@ -113,7 +113,11 @@ reviewer does not, and `tools/octo check` prints a note while they remain.
 - `publisher.privacy_policy_url`: an HTTPS URL that exists (**HUMAN**: the
   publisher owns this text). If the bundle ships `tools.json`, the app has an
   agent; say so in the listing and the privacy text.
-- The icon: follow App Hub's [`docs/ICONS.md`](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md).
+- The icon: replace the starter identity with this app's own object following
+  App Hub's [approved OctoSense format](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations).
+  Use a 64-point square master, central 66% foreground and no baked platform
+  corners or outer shadow. Inspect 64/40/24 px and Android/macOS/iOS frames,
+  then verify the target shell; a gate pass alone does not check the design.
 
 The listing is part of the attested release: changing its text later takes a
 new version.
@@ -505,7 +509,7 @@ under `store-data/my-test-notes/bundle`; **OPEN** does not show the app.
 [ ] tools/octo doctor                                   -> hub and card-host [ok]
 [ ] manifest.json: id final (last segment not reserved), version NEW, capabilities minimal, every host declared
 [ ] listing.json: no placeholders; category/platforms/age_rating valid; privacy URL HTTPS and real (HUMAN)
-[ ] icon at the path the listing names; readable at small size (App Hub docs/ICONS.md)
+[ ] distinct app icon in the OctoSense family format at the listing path; central 66% safe area; no baked corners/shadow; 64/40/24 px and platform-frame review (App Hub docs/ICONS.md)
 [ ] tools/octo run "$B" --port 8141 --hidden --detach   -> "admitted" line
 [ ] every interaction driven natively (click/type/tap) and its effect observed (screenshot or /snap or jail file)
 [ ] screenshots captured from the unsigned bundle with tools/octo shot, each opened and looked at; listed in listing.json

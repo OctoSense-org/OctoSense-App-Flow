@@ -57,6 +57,15 @@ Follow these rules:
   without an extension, 8 MiB at most. Plain `.txt`/`.md` license and
   attribution URLs are allowed; keep required notices. Agent guidance and
   structured resources retain their host/resource checks.
+- Create a distinct app icon following App Hub's
+  [OctoSense icon format](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations):
+  one dominant illustrated object, 64-point square master, foreground inside
+  the central 66% (10.88–53.12), ivory/ink materials and restrained accents.
+  Use a full-bleed ground without baked platform corners, circular crop or
+  outer shadow. Replace the starter identity; inspect 64/40/24 px on light/dark
+  grounds and Android/macOS/iOS frames. Declare one canonical bundle icon in
+  `listing.json`; do not patch Makepad or register this store app in the shell's
+  built-in override list. File admission is separate from visual review.
 - Capture screenshots from the unsigned bundle with `$OCTO shot`, and look at
   each one; never use a placeholder.
 - Restamp editable unsigned source after every edit (`$OCTO check` does it).

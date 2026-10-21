@@ -170,6 +170,16 @@ says who runs each one and when.
   sends only through the host's review, which RC2 has on macOS and Android. Check [docs/HOST-API-FAMILIES.md](docs/HOST-API-FAMILIES.md),
   and `runtime.describe` for optional methods, before writing a screen around
   a call.
+- **Give every new app its own family icon.** Follow App Hub's
+  [icon authoring guide](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations)
+  and the approved OctoSense family linked there. Use a 64-point square master,
+  keep foreground in the central 66%, use a restrained illustrated object and
+  ivory/ink materials with supporting accents. No baked platform corners,
+  circular mask or outer shadow. Replace the starter identity and review
+  64/40/24 px, light/dark grounds and Android/macOS/iOS frames. Ship one
+  canonical bundle icon declared in `listing.json`; do not modify Makepad or
+  add store apps to OctoSense's built-in overlay. The gate checks file validity,
+  not visual conformity or device acceptance.
 - **No placeholder screenshots.** Capture the real app in a real state with
   `tools/octo shot`, then open each PNG and look at it. Never draw, generate,
   redraw from `/snap`, crop from another app, or copy a screenshot to make

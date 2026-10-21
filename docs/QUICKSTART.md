@@ -189,6 +189,12 @@ platforms in the store, so before you publish, keep only the ones you
 tested, and have a person confirm the claim. Without the option, `new` stops
 with `tools/octo new: error: the following arguments are required: --platform`.
 
+The copied icon is a format example, not your app's final identity. Replace it
+with a distinct icon following App Hub's [OctoSense family format](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations):
+64-point square master, foreground in the central 66%, restrained illustrated
+object, no baked platform corners or outer shadow. Inspect 64/40/24 px and
+platform frames before submission; admission does not judge the design.
+
 Pick the id with care:
 
 - It is 1 to 64 characters of `[a-z0-9.-]`, does not start with `.` and has
