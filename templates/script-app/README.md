@@ -51,8 +51,11 @@ accident:
 - The publisher name, support URL and privacy-policy URL are placeholders,
   and so is the description's last sentence ("Replace this with …").
   `tools/octo check` reports them. A person replaces the publisher fields.
-- `assets/icon.svg` is the template's icon. Replace it with your own (App
-  Hub's [ICONS.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md)).
+- `assets/icon.svg` demonstrates the approved OctoSense family format. Replace
+  its identity with this app's own illustrated object: 64-point square master,
+  central 66% foreground and restrained ivory/ink materials and accents, with
+  no baked platform corners or outer shadow. Review 64/40/24 px and platform
+  frames; App Hub's [ICONS.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md) owns the packaging and review rules.
 - `platforms` is empty, and the gate refuses an empty list
   (`listing names no platforms`). `tools/octo new` requires `--platform` and
   writes the platforms you pass; repeat the option for each one. Passing a

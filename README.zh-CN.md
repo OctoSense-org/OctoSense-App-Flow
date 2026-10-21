@@ -14,6 +14,8 @@ App Flow 带着你（或编码 Agent）从一个想法（一段文字需求、�
 
 本仓库面向黑客松选手、其他 OctoSense 应用开发者，以及与他们协作的编码 Agent。本仓库最初名为 *OctoScript-AppCard*。
 
+每个新应用还需要符合已批准 OctoSense 插画家族的独立图标。格式、导出规则与评审清单由 App Hub 的[图标创作指南](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md)统一维护；两类应用模板均链接到该指南。
+
 ## 目录
 
 - [黑客松：从这里开始](#黑客松从这里开始)

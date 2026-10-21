@@ -1,4 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="4" y="4" width="56" height="56" rx="14" fill="#176878"/>
-  <path d="M32 16L48 32L32 48L16 32Z" fill="#fffdf7"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>Starter icon — replace with this app's own identity</title>
+  <defs><linearGradient id="tile" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#45a9ac"/><stop offset="1" stop-color="#217782"/></linearGradient></defs>
+  <rect x="0" y="0" width="64" height="64" rx="0" fill="url(#tile)" />
+  <g id="artwork" transform="translate(32 32) scale(0.9) translate(-32 -32)">
+    <rect x="19" y="16" width="28" height="35" rx="4" fill="#b8ded0" transform="rotate(-8 33 33.5)"/>
+    <path d="M23 12 H39 L47 20 V49 Q47 52 44 52 H23 Q20 52 20 49 V15 Q20 12 23 12 Z" fill="#fffdf7"/>
+    <path d="M39 12 V17 Q39 20 42 20 H47 Z" fill="#cde9e4"/>
+    <path d="M33.5 26 L40 32.5 L33.5 39 L27 32.5 Z" fill="#ef956a"/>
+    <path d="M28 44 H39" fill="none" stroke="#8bb8ad" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
 </svg>

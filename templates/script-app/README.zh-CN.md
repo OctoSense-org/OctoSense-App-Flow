@@ -39,7 +39,7 @@ script-app/
 
 - `listing.json` 引用了 `screenshots/01-main.png`，但这个文件并不存在。在你用 `tools/octo shot` 截取真实截图之前，准入检查会拒绝这个应用包。不要放占位图片。
 - 发布者名称、支持 URL 和隐私政策 URL 都是占位内容，描述的最后一句（“Replace this with …”）也是。`tools/octo check` 会提示它们；发布者字段由人来替换。
-- `assets/icon.svg` 是模板自带的图标，请换成你自己的（见 App Hub 的 [ICONS.zh-CN.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md)）。
+- `assets/icon.svg` 演示已批准的 OctoSense 家族格式。必须用应用自己的插画物件替换其身份：64 点正方形原稿、中央 66% 前景、克制的象牙白/墨色材质与点缀色，不预置平台圆角或外部阴影。检查 64/40/24 像素及平台外框；打包和评审规则由 App Hub 的 [ICONS.zh-CN.md](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md)规定。
 - `platforms` 是空列表，准入检查会拒绝空列表（`listing names no platforms`）。`tools/octo new` 必须指定 `--platform`，并写入你传入的平台；每个平台写一次。传入平台只是声明，不是测试：发布之前，只保留你实际运行过的平台，并由人确认这一声明。在 Mac 上运行 `card-host` 测试的是 `macos`，不是 Android。
 - 如果修改 id，它的最后一段不能是 App Hub 的保留名（`notes`、`weather`、`terminal` 等）。`tools/octo new` 创建应用时会拒绝保留名；之后改过的 id 若用了保留名，准入检查会拒绝。
 

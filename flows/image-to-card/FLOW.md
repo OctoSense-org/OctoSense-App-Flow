@@ -165,6 +165,13 @@ listing's https support and privacy links, which the gate allows.) The prefix
 in step 3 is the manifest's `artwork.source_prefix`; adjust the pattern if you
 changed it.
 
+Create a distinct app icon before the hand-off, following App Hub's
+[OctoSense icon format](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.md#design-and-export-recommendations).
+The extracted screen artwork is not automatically a launcher icon: author a
+64-point square master, central 66% foreground and one illustrated object,
+without baked platform corners or an outer shadow. Replace the starter icon,
+declare its path in `listing.json`, and review 64/40/24 px plus platform frames.
+
 Then run steps 2–9 of the
 [common hand-off](../README.md#every-flow-follows-the-same-contract), which
 sets `HUB_BIN` and `CARD_HOST_BIN`. Step 3 expects only the missing-screenshot

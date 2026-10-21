@@ -125,6 +125,8 @@ created …/my-app
 
 `--platform` 是必填项，你要在哪些平台上运行应用，就为每个平台写一次：`macos`、`windows`、`linux`、`android`、`ios`、`openharmony` 或 `web`。在 Mac 上用 `card-host` 运行，测试的是 `macos`。商店信息会在商店中声明这些平台，所以发布之前，只保留你实际测试过的平台，并由人确认这一声明。不加这个选项时，`new` 会停止，并输出 `tools/octo new: error: the following arguments are required: --platform`。
 
+复制的图标只演示格式，不是应用最终身份。按照 App Hub 的 [OctoSense 家族格式](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md#设计与导出建议)替换为独立图标：64 点正方形原稿、中央 66% 前景、克制的插画物件，不预置平台圆角或外部阴影。提交前检查 64/40/24 像素及平台外框；准入检查不评判设计。
+
 请慎重选择 id：
 
 - 长度为 1 到 64 个字符，只能用 `[a-z0-9.-]`，不能以 `.` 开头，也不能包含 `..`。`new` 会检查这一点。

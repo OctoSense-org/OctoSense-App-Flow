@@ -74,7 +74,7 @@ export B="$APP/bundle"
 - `platforms`：只写你实际运行过应用的平台（**HUMAN**：由人确认）。在 Mac 上用 `card-host` 运行，对应的是 `macos`。`tools/octo new` 写入的是你用 `--platform` 传入的平台；删掉没有测试过的平台。
 - `category`、`age_rating` 等字段的取值见 App Hub 的 [商店信息](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/PUBLISHING.zh-CN.md#商店信息) 一节。
 - `publisher.privacy_policy_url`：一个确实存在的 HTTPS URL（**HUMAN**：隐私政策的文字由发布者负责）。如果应用包附带 `tools.json`，应用就有 Agent，请在商店信息和隐私文本中写明。
-- 图标：遵循 App Hub 的 [`docs/ICONS.zh-CN.md`](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md)。
+- 图标：按照 App Hub 的[已批准 OctoSense 格式](https://github.com/OctoSense-org/OctoSense-App-Hub/blob/main/docs/ICONS.zh-CN.md#设计与导出建议)，用应用自己的物件替换模板身份。使用 64 点正方形原稿、中央 66% 前景，不预置平台圆角或外部阴影。检查 64/40/24 像素及 Android/macOS/iOS 外框，再在目标 Shell 中验证；仅通过准入检查不代表设计合格。
 
 商店信息是带证明的 Release 的一部分：以后要修改其中的文字，就需要新版本。
 
@@ -315,7 +315,7 @@ App Hub 的独立商店 `appstore` 不需要 Shell 也能从同一个镜像安�
 [ ] tools/octo doctor                                   -> hub 和 card-host 均为 [ok]
 [ ] manifest.json：id 已定稿（最后一段不是保留名），version 是新值，capabilities 最小化，每个主机都已声明
 [ ] listing.json：没有占位内容；category/platforms/age_rating 取值合法；隐私政策 URL 是 HTTPS 且真实存在（HUMAN）
-[ ] 图标位于商店信息指定的路径；小尺寸下清晰可辨（App Hub docs/ICONS.md）
+[ ] 独立应用图标符合 OctoSense 家族格式且位于商店信息指定的路径；中央 66% 安全区域；不预置圆角/阴影；已检查 64/40/24 像素及平台外框（App Hub docs/ICONS.md）
 [ ] tools/octo run "$B" --port 8141 --hidden --detach   -> 输出含 "admitted" 的一行
 [ ] 每个交互都以原生方式操作过（点击、输入、轻触），并观察到效果（截图、/snap 或 jail 中的文件）
 [ ] 用 tools/octo shot 从未签名的应用包截图，每张都打开看过；都已列入 listing.json
